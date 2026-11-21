@@ -1,0 +1,2229 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RVCE CV255TBB — 3D Adaptive Traffic Signal Simulation (Daylight)</title>
+  <!-- Tailwind CSS for responsive glassmorphism HUD & academic report layout -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js r128 & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Inter & JetBrains Mono Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #bae6fd;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #f8fafc;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+    }
+    /* High-contrast dark glassmorphism HUD panels for bright daylight legibility */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.86);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      box-shadow: 0 14px 34px -6px rgba(15, 23, 42, 0.45);
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.55);
+      border-radius: 9999px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.8);
+    }
+    .modal-selectable, .modal-selectable * {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+  </style>
+</head>
+<body>
+  <!-- Full-Viewport 3D Daylight WebGL Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Top Navigation, Scenario, Speed (1x/2x/5x) & Control Bar -->
+  <header class="fixed top-0 left-0 right-0 z-20 p-2.5 sm:p-3.5 pointer-events-none">
+    <div class="max-w-[1640px] mx-auto flex flex-wrap items-center justify-between gap-2">
+      
+      <!-- University & Course Identity Badge -->
+      <div class="glass-panel rounded-2xl px-3.5 py-2 pointer-events-auto flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center font-extrabold text-slate-950 text-sm shadow-lg shadow-cyan-500/25 shrink-0">
+          RV
+        </div>
+        <div class="leading-tight">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-xs sm:text-sm tracking-tight text-white">RV College of Engineering</span>
+            <span class="hidden sm:inline-block px-1.5 py-0.5 rounded bg-cyan-500/25 border border-cyan-400/40 text-cyan-200 font-mono text-[10px] font-semibold">CV255TBB</span>
+          </div>
+          <p class="text-[11px] text-slate-300">Traffic Engineering (Sem V) • Assignment 18 ATCS</p>
+        </div>
+      </div>
+
+      <!-- Primary Scenario, Signal Mode, Simulation Speed (1x/2x/5x) & Report Triggers -->
+      <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2">
+        
+        <!-- Scenario Selector -->
+        <div class="flex items-center bg-slate-950/85 rounded-xl p-1 border border-slate-700/80">
+          <button id="btn-scenario-normal" type="button"
+            class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-cyan-400 text-slate-950 shadow-sm cursor-pointer">
+            <span class="w-2 h-2 rounded-full bg-slate-950"></span>
+            <span>1. Normal Traffic</span>
+          </button>
+          <button id="btn-scenario-surge" type="button"
+            class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 text-slate-200 hover:text-white cursor-pointer">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>2. Traffic Surge</span>
+          </button>
+        </div>
+
+        <!-- Signal Control Strategy Switcher -->
+        <div class="flex items-center bg-slate-950/85 rounded-xl p-1 border border-slate-700/80">
+          <button id="btn-mode-adaptive" type="button"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-emerald-500/30 text-emerald-200 border border-emerald-400/50 cursor-pointer">
+            Adaptive ITS
+          </button>
+          <button id="btn-mode-fixed" type="button"
+            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white border border-transparent cursor-pointer">
+            Fixed-Time (30s)
+          </button>
+        </div>
+
+        <!-- Simulation Speed Buttons (1x, 2x, 5x) -->
+        <div class="flex items-center bg-slate-950/85 rounded-xl p-1 border border-slate-700/80" title="Simulation Time-Scale Speed">
+          <span class="text-[10px] font-mono uppercase text-slate-400 px-1.5 hidden xl:inline">Speed</span>
+          <button id="btn-speed-1" type="button"
+            class="speed-btn px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold transition-all bg-amber-400 text-slate-950 shadow-sm cursor-pointer">
+            1x
+          </button>
+          <button id="btn-speed-2" type="button"
+            class="speed-btn px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold transition-all text-slate-200 hover:text-white cursor-pointer">
+            2x
+          </button>
+          <button id="btn-speed-5" type="button"
+            class="speed-btn px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold transition-all text-slate-200 hover:text-white cursor-pointer">
+            5x
+          </button>
+        </div>
+
+        <!-- ITS Sensors Visibility Toggle -->
+        <button id="btn-toggle-sensors" type="button"
+          class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/95 hover:bg-slate-700 text-cyan-200 border border-cyan-400/35 transition flex items-center gap-1.5 cursor-pointer">
+          <span id="sensor-dot" class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></span>
+          <span id="sensor-btn-text">ITS Sensors: ON</span>
+        </button>
+
+        <!-- Assignment 18 Academic Report Trigger -->
+        <button id="btn-open-report" type="button"
+          class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 hover:from-indigo-300 hover:to-cyan-300 text-slate-950 shadow-lg shadow-cyan-500/20 transition flex items-center gap-1.5 cursor-pointer">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span>Assignment 18 Report</span>
+        </button>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Right Live Telemetry & Signal Control HUD (Desktop/Tablet) -->
+  <aside class="hidden md:flex fixed top-20 right-3.5 bottom-16 w-80 lg:w-[345px] z-10 pointer-events-none flex-col gap-2.5">
+    
+    <!-- Signal Phase & Countdown Card -->
+    <div class="glass-panel rounded-2xl p-3.5 pointer-events-auto">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[10px] font-mono uppercase tracking-wider text-slate-300">Active Signal Phase</span>
+        <div class="flex items-center gap-1.5">
+          <span id="hud-speed-badge" class="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200 border border-amber-400/40 font-mono text-[10px] font-bold">
+            1x SPEED
+          </span>
+          <span id="hud-mode-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/25 text-emerald-200 border border-emerald-400/40">
+            ATCS ADAPTIVE
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 mb-2.5">
+        <div>
+          <div id="hud-phase-title" class="text-base font-extrabold text-emerald-400 tracking-tight">
+            PHASE 1: N–S GREEN
+          </div>
+          <div id="hud-phase-sub" class="text-[11px] text-slate-300 font-mono">
+            E–W Approaches: RED HOLD
+          </div>
+        </div>
+        <div class="text-right bg-slate-950/90 border border-slate-700 rounded-xl px-3 py-1.5 min-w-[76px]">
+          <div id="hud-timer" class="text-xl font-mono font-bold text-white leading-none">20.0s</div>
+          <div id="hud-max-green" class="text-[9px] font-mono text-slate-300 mt-0.5">LIM 20s</div>
+        </div>
+      </div>
+
+      <!-- Visual Signal Aspect Status Pills -->
+      <div class="grid grid-cols-2 gap-2 text-[11px] font-mono">
+        <div class="glass-card rounded-xl px-2.5 py-1.5 flex items-center justify-between">
+          <span class="text-slate-200 font-semibold">N–S Arterial</span>
+          <span id="pill-ns-aspect" class="flex items-center gap-1.5 font-bold text-emerald-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>GREEN
+          </span>
+        </div>
+        <div class="glass-card rounded-xl px-2.5 py-1.5 flex items-center justify-between">
+          <span class="text-slate-200 font-semibold">E–W Cross</span>
+          <span id="pill-ew-aspect" class="flex items-center gap-1.5 font-bold text-rose-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>RED
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real-Time Performance Metrics (LOS & Control Delay) -->
+    <div class="glass-panel rounded-2xl p-3.5 pointer-events-auto">
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <div class="glass-card rounded-xl p-2 text-center">
+          <div class="text-[10px] font-mono text-slate-300 uppercase">LOS</div>
+          <div id="hud-los" class="text-xl font-extrabold text-emerald-400 mt-0.5">B</div>
+        </div>
+        <div class="glass-card rounded-xl p-2 text-center">
+          <div class="text-[10px] font-mono text-slate-300 uppercase">Avg Delay</div>
+          <div id="hud-delay" class="text-base font-mono font-bold text-cyan-300 mt-1">14.2s</div>
+        </div>
+        <div class="glass-card rounded-xl p-2 text-center">
+          <div class="text-[10px] font-mono text-slate-300 uppercase">Total Flow</div>
+          <div id="hud-total-pcu" class="text-sm font-mono font-bold text-slate-100 mt-1.5">1,980</div>
+        </div>
+      </div>
+
+      <!-- Approach-by-Approach Detector Telemetry Table -->
+      <div class="text-[10px] font-mono uppercase tracking-wider text-slate-300 mb-1.5 flex justify-between">
+        <span>Approach Loop Telemetry</span>
+        <span>IRC SP:41 LHT</span>
+      </div>
+      <div class="overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/75">
+        <table class="w-full text-left font-mono text-[11px]">
+          <thead>
+            <tr class="text-slate-300 border-b border-slate-800 text-[10px] bg-slate-900/90">
+              <th class="py-1.5 px-2">Arm</th>
+              <th class="py-1.5 px-1.5 text-right">PCU/h</th>
+              <th class="py-1.5 px-1.5 text-right">Occ%</th>
+              <th class="py-1.5 px-1.5 text-right">Hdwy</th>
+              <th class="py-1.5 px-2 text-right">Queue</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/70">
+            <tr>
+              <td class="py-1.5 px-2 font-bold text-cyan-300">North</td>
+              <td id="tbl-N-pcu" class="py-1.5 px-1.5 text-right text-slate-100">510</td>
+              <td id="tbl-N-occ" class="py-1.5 px-1.5 text-right text-slate-200">14%</td>
+              <td id="tbl-N-hdw" class="py-1.5 px-1.5 text-right text-slate-200">4.2s</td>
+              <td id="tbl-N-que" class="py-1.5 px-2 text-right font-bold text-slate-100">1 (7m)</td>
+            </tr>
+            <tr>
+              <td class="py-1.5 px-2 font-bold text-cyan-300">South</td>
+              <td id="tbl-S-pcu" class="py-1.5 px-1.5 text-right text-slate-100">495</td>
+              <td id="tbl-S-occ" class="py-1.5 px-1.5 text-right text-slate-200">13%</td>
+              <td id="tbl-S-hdw" class="py-1.5 px-1.5 text-right text-slate-200">4.4s</td>
+              <td id="tbl-S-que" class="py-1.5 px-2 text-right font-bold text-slate-100">1 (7m)</td>
+            </tr>
+            <tr>
+              <td class="py-1.5 px-2 font-bold text-indigo-300">East</td>
+              <td id="tbl-E-pcu" class="py-1.5 px-1.5 text-right text-slate-100">485</td>
+              <td id="tbl-E-occ" class="py-1.5 px-1.5 text-right text-slate-200">12%</td>
+              <td id="tbl-E-hdw" class="py-1.5 px-1.5 text-right text-slate-200">4.5s</td>
+              <td id="tbl-E-que" class="py-1.5 px-2 text-right font-bold text-slate-100">2 (14m)</td>
+            </tr>
+            <tr>
+              <td class="py-1.5 px-2 font-bold text-indigo-300">West</td>
+              <td id="tbl-W-pcu" class="py-1.5 px-1.5 text-right text-slate-100">490</td>
+              <td id="tbl-W-occ" class="py-1.5 px-1.5 text-right text-slate-200">12%</td>
+              <td id="tbl-W-hdw" class="py-1.5 px-1.5 text-right text-slate-200">4.5s</td>
+              <td id="tbl-W-que" class="py-1.5 px-2 text-right font-bold text-slate-100">1 (7m)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Scenario Insight & Live ATCS Controller Decision Log -->
+    <div class="glass-panel rounded-2xl p-3.5 pointer-events-auto flex-1 min-h-0 flex flex-col gap-2">
+      <div id="scenario-insight-banner" class="rounded-xl p-2.5 bg-cyan-950/75 border border-cyan-400/35 text-[11px] leading-snug text-cyan-100">
+        <strong class="text-cyan-300">Scenario 1 (Normal Traffic):</strong> Balanced off-peak flow (~500 PCU/hr/arm). Adaptive gap-out compresses cycle length with minimal delay (LOS B).
+      </div>
+
+      <div class="text-[10px] font-mono uppercase tracking-wider text-slate-300 flex items-center justify-between">
+        <span>ATCS Real-Time Decision Log</span>
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+      </div>
+      <div id="decision-log" class="flex-1 overflow-y-auto custom-scroll space-y-1 font-mono text-[10.5px] pr-1">
+        <div class="text-slate-200">[00:00] Daylight ATCS Controller initialized (LHT IRC SP:41).</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Bottom Camera Presets & Sensor Legend Bar -->
+  <footer class="fixed bottom-0 left-0 right-0 z-20 p-2.5 sm:p-3.5 pointer-events-none">
+    <div class="max-w-[1640px] mx-auto flex flex-wrap items-center justify-between gap-2">
+      
+      <!-- Camera View Presets -->
+      <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto flex items-center gap-1">
+        <span class="text-[10px] font-mono uppercase text-slate-300 px-2 hidden sm:inline">Camera:</span>
+        <button id="cam-iso" type="button"
+          class="cam-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-cyan-400/25 text-cyan-200 border border-cyan-400/45 transition cursor-pointer">
+          Overview
+        </button>
+        <button id="cam-signal" type="button"
+          class="cam-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 border border-transparent transition cursor-pointer">
+          Signal Close-Up
+        </button>
+        <button id="cam-surge" type="button"
+          class="cam-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 border border-transparent transition cursor-pointer">
+          North Surge
+        </button>
+        <button id="cam-sensor" type="button"
+          class="cam-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 border border-transparent transition cursor-pointer">
+          ITS Hub
+        </button>
+      </div>
+
+      <!-- Compact Mobile Telemetry Pill (Visible on < md viewports) -->
+      <div class="md:hidden glass-panel rounded-2xl px-3 py-1.5 pointer-events-auto flex items-center gap-3 font-mono text-xs">
+        <span id="mobile-phase" class="text-emerald-400 font-bold">N-S GRN</span>
+        <span>LOS: <strong id="mobile-los" class="text-emerald-400">B</strong></span>
+        <span>Delay: <strong id="mobile-delay" class="text-cyan-300">14.2s</strong></span>
+        <span>N-Q: <strong id="mobile-nq" class="text-amber-300">1</strong></span>
+      </div>
+
+      <!-- Clean Sensor & ITS Hardware Legend -->
+      <div class="hidden lg:flex glass-panel rounded-2xl px-3.5 py-2 pointer-events-auto items-center gap-4 text-[11px] font-mono text-slate-200">
+        <div class="flex items-center gap-1.5">
+          <span class="w-3 h-2 rounded-xs bg-amber-400 inline-block shadow-[0_0_8px_#facc15]"></span>
+          <span>Stop-Line Loop (0–2m)</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-3 h-2 rounded-xs bg-cyan-400 inline-block shadow-[0_0_8px_#22d3ee]"></span>
+          <span>Advance Detector (45m)</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_8px_#34d399]"></span>
+          <span>RSU → TCC 5G Link</span>
+        </div>
+        <div class="text-slate-300 border-l border-slate-700 pl-3">
+          Left-Drag: Orbit • Scroll: Zoom • Right-Drag: Pan
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- Interactive Assignment 18 Academic Report Modal -->
+  <div id="report-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md">
+    <div class="glass-panel modal-selectable rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-slate-700/80 shadow-2xl overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="px-5 sm:px-7 py-4 border-b border-slate-800 flex items-center justify-between gap-4 bg-slate-900/95">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-xs font-bold">RVCE • CV255TBB</span>
+            <span class="text-xs text-slate-400 font-mono">Department of Civil Engineering • Semester V</span>
+          </div>
+          <h2 class="text-base sm:text-xl font-extrabold text-white mt-1">
+            Assignment 18: Conceptual Design of an Adaptive Traffic Signal System
+          </h2>
+        </div>
+        <button id="btn-close-report" type="button"
+          class="p-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-slate-700 transition cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Scrollable Body -->
+      <div class="p-5 sm:p-7 overflow-y-auto custom-scroll space-y-7 text-sm text-slate-300 leading-relaxed">
+        
+        <!-- Executive Case Overview -->
+        <div class="rounded-2xl p-4 bg-gradient-to-r from-cyan-950/70 to-indigo-950/70 border border-cyan-500/35">
+          <h3 class="text-cyan-300 font-bold text-xs uppercase tracking-wider font-mono mb-1">Case Problem & Engineering Objective</h3>
+          <p class="text-slate-200 text-xs sm:text-sm">
+            A four-arm urban arterial intersection in Bengaluru (Left-Hand Traffic, IRC SP:41 geometry) operates under fixed-time signals (30s equal splits), causing severe directional queue spillback during tidal peak surges and wasted green time during off-peak periods. Below is the complete 8-task conceptual design for an <strong>Adaptive Traffic Control System (ATCS)</strong> demonstrated in the live daylight 3D simulation.
+          </p>
+        </div>
+
+        <!-- Task 1: Traffic Demand Variation Study -->
+        <section class="space-y-3">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">1</span>
+            Traffic Demand Variation Study (Diurnal & Directional Profile)
+          </h3>
+          <p class="text-xs sm:text-sm text-slate-300">
+            Classified volume counts converted into Passenger Car Units (PCU per IRC:106) reveal bimodal commuter peaks (08:30–10:30 AM and 17:30–20:00 PM) with strong tidal asymmetry: North–South arterial demand surges to <strong>3,800 PCU/hr</strong> while East–West cross-street demand stays near <strong>540 PCU/hr</strong>.
+          </p>
+          <div class="rounded-2xl p-4 bg-slate-950/85 border border-slate-800">
+            <div class="text-xs font-mono text-slate-400 mb-2">Figure 1.1 — 24-Hour Directional Traffic Demand Variation (PCU/hr)</div>
+            <svg viewBox="0 0 680 200" class="w-full h-auto">
+              <line x1="60" y1="20" x2="60" y2="165" stroke="#334155" stroke-width="1.5" />
+              <line x1="60" y1="165" x2="650" y2="165" stroke="#334155" stroke-width="1.5" />
+              <line x1="60" y1="128" x2="650" y2="128" stroke="#1e293b" stroke-dasharray="4 4" />
+              <line x1="60" y1="92" x2="650" y2="92" stroke="#1e293b" stroke-dasharray="4 4" />
+              <line x1="60" y1="55" x2="650" y2="55" stroke="#1e293b" stroke-dasharray="4 4" />
+              <text x="52" y="168" fill="#94a3b8" font-size="10" text-anchor="end" font-family="monospace">0</text>
+              <text x="52" y="131" fill="#94a3b8" font-size="10" text-anchor="end" font-family="monospace">1000</text>
+              <text x="52" y="95" fill="#94a3b8" font-size="10" text-anchor="end" font-family="monospace">2000</text>
+              <text x="52" y="58" fill="#94a3b8" font-size="10" text-anchor="end" font-family="monospace">3000</text>
+              <text x="52" y="25" fill="#94a3b8" font-size="10" text-anchor="end" font-family="monospace">4000</text>
+              <text x="65" y="182" fill="#94a3b8" font-size="10" font-family="monospace">00:00</text>
+              <text x="180" y="182" fill="#94a3b8" font-size="10" font-family="monospace">06:00</text>
+              <text x="275" y="182" fill="#fbbf24" font-size="10" font-weight="bold" font-family="monospace">09:30 AM Peak</text>
+              <text x="405" y="182" fill="#94a3b8" font-size="10" font-family="monospace">14:00</text>
+              <text x="505" y="182" fill="#fbbf24" font-size="10" font-weight="bold" font-family="monospace">18:30 PM Peak</text>
+              <text x="615" y="182" fill="#94a3b8" font-size="10" font-family="monospace">23:00</text>
+              <path d="M 65 156 Q 130 152, 185 130 T 295 28 Q 350 85, 415 112 T 535 24 Q 595 95, 645 148"
+                fill="none" stroke="#f59e0b" stroke-width="3" />
+              <path d="M 65 160 Q 150 156, 220 144 T 305 128 Q 375 138, 435 142 T 540 126 Q 600 145, 645 156"
+                fill="none" stroke="#22d3ee" stroke-width="2.5" />
+              <rect x="430" y="14" width="12" height="4" fill="#f59e0b" />
+              <text x="448" y="19" fill="#fde68a" font-size="10" font-family="monospace">N–S Arterial (Surge: 3,800 PCU/h)</text>
+              <rect x="430" y="29" width="12" height="4" fill="#22d3ee" />
+              <text x="448" y="34" fill="#a5f3fc" font-size="10" font-family="monospace">E–W Cross-Street (~540 PCU/h)</text>
+            </svg>
+          </div>
+        </section>
+
+        <!-- Task 2 & Task 3: Detection Technologies & Real-Time Traffic Parameters -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="space-y-2.5">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">2</span>
+              Suitable Traffic-Detection Technologies
+            </h3>
+            <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/75">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-900 text-slate-300 font-mono text-[11px]">
+                  <tr>
+                    <th class="p-2.5">Sensor Type</th>
+                    <th class="p-2.5">Role & Accuracy</th>
+                    <th class="p-2.5">Trade-Off</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                  <tr>
+                    <td class="p-2.5 font-semibold text-amber-300">Inductive Loops (0–2m & 45m)</td>
+                    <td class="p-2.5">99% presence & occupancy accuracy; low latency (&lt;20ms).</td>
+                    <td class="p-2.5 text-slate-400">Requires saw-cut pavement installation.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-2.5 font-semibold text-cyan-300">77 GHz FMCW Radar</td>
+                    <td class="p-2.5">Multi-lane dilemma-zone speed & queue tracking up to 150m; all-weather.</td>
+                    <td class="p-2.5 text-slate-400">Higher per-arm hardware cost.</td>
+                  </tr>
+                  <tr>
+                    <td class="p-2.5 font-semibold text-indigo-300">Overhead AI Edge Vision</td>
+                    <td class="p-2.5">Multi-class PCU classification (Bus, Truck, Car, 2W) & spillback detection.</td>
+                    <td class="p-2.5 text-slate-400">Requires IR night/monsoon filtering.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="space-y-2.5">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">3</span>
+              Real-Time Traffic Parameters Measured
+            </h3>
+            <ul class="space-y-2 text-xs bg-slate-950/75 p-3.5 rounded-xl border border-slate-800">
+              <li><strong class="text-cyan-300 font-mono">1. Classified Flow Rate (q, PCU/hr):</strong> Weighted vehicle counts at 45m upstream detectors to compute directional demand ratios.</li>
+              <li><strong class="text-cyan-300 font-mono">2. Time Occupancy (O, %):</strong> Fraction of scan time a stop-line inductive loop is occupied; O &gt; 35% signals queue saturation.</li>
+              <li><strong class="text-cyan-300 font-mono">3. Time Headway (h, sec):</strong> Inter-vehicle gap across the stop bar; h &gt; 3.0s triggers early phase <em>Gap-Out</em>.</li>
+              <li><strong class="text-cyan-300 font-mono">4. Queue Length (L_q, meters):</strong> Real-time spatial queue extent between the 0m stop bar and 45m advance loop.</li>
+              <li><strong class="text-cyan-300 font-mono">5. Approach Speed (v, km/h):</strong> Spot speed used for dilemma-zone protection prior to amber onset.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Task 4: Conceptual Signal-Control Logic (State Machine Flowchart) -->
+        <section class="space-y-2.5">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">4</span>
+            Conceptual Adaptive Signal-Control Logic (Gap-Out & Surge Extension)
+          </h3>
+          <div class="rounded-2xl p-4 bg-slate-950/85 border border-slate-800 overflow-x-auto">
+            <svg viewBox="0 0 760 155" class="w-full min-w-[620px] h-auto">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+                </marker>
+              </defs>
+              <rect x="10" y="45" width="125" height="56" rx="10" fill="#064e3b" stroke="#10b981" stroke-width="1.5" />
+              <text x="72" y="68" fill="#a7f3d0" font-size="11" font-weight="bold" text-anchor="middle" font-family="monospace">1. MIN GREEN</text>
+              <text x="72" y="85" fill="#6ee7b7" font-size="10" text-anchor="middle" font-family="monospace">g_min = 10.0s</text>
+
+              <line x1="135" y1="73" x2="175" y2="73" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#arrow)" />
+
+              <polygon points="245,25 320,73 245,121 170,73" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5" />
+              <text x="245" y="69" fill="#e0f2fe" font-size="10" font-weight="bold" text-anchor="middle" font-family="monospace">Loop Occ &gt; 25%</text>
+              <text x="245" y="83" fill="#7dd3fc" font-size="9.5" text-anchor="middle" font-family="monospace">or Hdwy &lt; 3.0s?</text>
+
+              <line x1="320" y1="73" x2="365" y2="73" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#arrow)" />
+              <text x="342" y="65" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle" font-family="monospace">YES</text>
+
+              <rect x="370" y="45" width="145" height="56" rx="10" fill="#172554" stroke="#3b82f6" stroke-width="1.5" />
+              <text x="442" y="68" fill="#bfdbfe" font-size="11" font-weight="bold" text-anchor="middle" font-family="monospace">2. EXTEND GREEN</text>
+              <text x="442" y="85" fill="#93c5fd" font-size="10" text-anchor="middle" font-family="monospace">+4s up to g_max=55s</text>
+
+              <path d="M 442 45 L 442 14 L 245 14 L 245 22" fill="none" stroke="#38bdf8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrow)" />
+
+              <line x1="515" y1="73" x2="555" y2="73" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#arrow)" />
+              <text x="535" y="64" fill="#fbbf24" font-size="9" text-anchor="middle" font-family="monospace">MAX/GAP</text>
+
+              <rect x="560" y="45" width="90" height="56" rx="10" fill="#451a03" stroke="#f59e0b" stroke-width="1.5" />
+              <text x="605" y="68" fill="#fde68a" font-size="11" font-weight="bold" text-anchor="middle" font-family="monospace">3. AMBER</text>
+              <text x="605" y="85" fill="#fcd34d" font-size="10" text-anchor="middle" font-family="monospace">Y = 3.0s</text>
+
+              <line x1="650" y1="73" x2="675" y2="73" stroke="#38bdf8" stroke-width="1.8" marker-end="url(#arrow)" />
+
+              <rect x="680" y="45" width="72" height="56" rx="10" fill="#4c0519" stroke="#f43f5e" stroke-width="1.5" />
+              <text x="716" y="68" fill="#fecdd3" font-size="10" font-weight="bold" text-anchor="middle" font-family="monospace">ALL-RED</text>
+              <text x="716" y="85" fill="#fda4af" font-size="10" text-anchor="middle" font-family="monospace">1.5s</text>
+            </svg>
+          </div>
+        </section>
+
+        <!-- Task 5: Sensor Location & Arrangement (CAD Schematic) -->
+        <section class="space-y-2.5">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">5</span>
+            Proposed Sensor Location & Intersection Layout (LHT IRC SP:41)
+          </h3>
+          <div class="rounded-2xl p-4 bg-slate-950/85 border border-slate-800 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
+            <div class="md:col-span-3">
+              <svg viewBox="0 0 420 210" class="w-full h-auto rounded-xl bg-slate-900/90 border border-slate-800">
+                <rect x="20" y="65" width="380" height="80" fill="#1e293b" />
+                <line x1="20" y1="105" x2="320" y2="105" stroke="#facc15" stroke-width="2" />
+                <line x1="20" y1="85" x2="320" y2="85" stroke="#94a3b8" stroke-dasharray="6 6" />
+                <line x1="20" y1="125" x2="320" y2="125" stroke="#94a3b8" stroke-dasharray="6 6" />
+                <line x1="320" y1="65" x2="320" y2="105" stroke="#ffffff" stroke-width="4" />
+                <rect x="332" y="68" width="16" height="74" fill="none" stroke="#cbd5e1" stroke-dasharray="4 4" />
+                <rect x="90" y="70" width="22" height="12" fill="none" stroke="#22d3ee" stroke-width="2" />
+                <rect x="90" y="90" width="22" height="12" fill="none" stroke="#22d3ee" stroke-width="2" />
+                <text x="101" y="55" fill="#22d3ee" font-size="9.5" text-anchor="middle" font-family="monospace">Advance Loop (45m)</text>
+                <rect x="292" y="70" width="22" height="12" fill="none" stroke="#facc15" stroke-width="2" />
+                <rect x="292" y="90" width="22" height="12" fill="none" stroke="#facc15" stroke-width="2" />
+                <text x="285" y="55" fill="#facc15" font-size="9.5" text-anchor="middle" font-family="monospace">Stop-Line Loop (0–2m)</text>
+                <line x1="320" y1="45" x2="320" y2="155" stroke="#94a3b8" stroke-width="3" />
+                <circle cx="320" cy="45" r="6" fill="#6366f1" />
+                <text x="345" y="42" fill="#a5b4fc" font-size="9" font-family="monospace">Gantry Signal + AI Cam</text>
+                <rect x="345" y="155" width="26" height="18" rx="3" fill="#10b981" />
+                <text x="358" y="186" fill="#6ee7b7" font-size="9" text-anchor="middle" font-family="monospace">ATCS Cabinet + 5G RSU</text>
+              </svg>
+            </div>
+            <div class="md:col-span-2 space-y-2 text-xs">
+              <p><strong class="text-amber-300">Stop-Line Loops (0–2m):</strong> Placed immediately upstream of the white stop bar in each inbound lane to detect waiting queues and stop-bar headways.</p>
+              <p><strong class="text-cyan-300">Advance Detectors (45m):</strong> Placed 45m upstream to measure approaching platoons ~3.5s before arrival, enabling seamless green extensions without stopping main-street platoons.</p>
+              <p><strong class="text-indigo-300">Overhead Mast-Arm Gantry:</strong> Carries 1.6x high-visibility signal heads plus compact AI vision housings for multi-class PCU counting.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Task 6 & Task 7: ITS Architecture & Real-Time Signal Timing Equations -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="space-y-2.5">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">6</span>
+              Three-Layer ITS Communication Architecture
+            </h3>
+            <div class="space-y-2 text-xs bg-slate-950/75 p-3.5 rounded-xl border border-slate-800">
+              <div class="p-2.5 rounded-lg bg-slate-900 border-l-4 border-amber-400">
+                <div class="font-bold text-amber-300 font-mono">Layer 1: Field Detection & Actuation</div>
+                <p class="text-slate-300 mt-0.5">Inductive loop detector cards, 77GHz radar, overhead AI vision cameras, and LED signal heads wired via shielded RS-485/Ethernet to the roadside cabinet.</p>
+              </div>
+              <div class="p-2.5 rounded-lg bg-slate-900 border-l-4 border-cyan-400">
+                <div class="font-bold text-cyan-300 font-mono">Layer 2: Edge ATCS Controller & 5G RSU</div>
+                <p class="text-slate-300 mt-0.5">Industrial edge processor runs local vehicle-actuated gap-out/extension logic (&lt;50ms latency) and streams telemetry via 5G / Fiber-Optic backhaul.</p>
+              </div>
+              <div class="p-2.5 rounded-lg bg-slate-900 border-l-4 border-emerald-400">
+                <div class="font-bold text-emerald-300 font-mono">Layer 3: Central Traffic Control Centre (TCC)</div>
+                <p class="text-slate-300 mt-0.5">Corridor green-wave offset coordination, incident overrides, BMTC transit signal priority (TSP), and live operator dashboard.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2.5">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">7</span>
+              Signal Timing Modification Methodology
+            </h3>
+            <div class="space-y-2.5 text-xs bg-slate-950/75 p-3.5 rounded-xl border border-slate-800 font-mono">
+              <p class="font-sans text-slate-300">
+                Every cycle, the ATCS recalculates critical flow ratios <strong>y_i = q_i / s_i</strong> (where saturation flow <em>s_i ≈ 1,900 PCU/hr/lane</em>) and updates Webster’s optimal cycle & green splits:
+              </p>
+              <div class="p-2.5 rounded-lg bg-slate-900 text-cyan-300 border border-slate-800">
+                C_opt = (1.5 · L + 5) / (1 − Y), &nbsp; Y = Σ y_i
+              </div>
+              <div class="p-2.5 rounded-lg bg-slate-900 text-emerald-300 border border-slate-800">
+                g_i = clamp( (y_i / Y) · (C_opt − L), &nbsp;g_min=10s, &nbsp;g_max=55s )
+              </div>
+              <p class="font-sans text-slate-300">
+                During a <strong>North–South Surge</strong>, <em>y_NS</em> rises sharply relative to <em>y_EW</em>, shifting green split from 50%/50% (30s/30s) to <strong>82%/18% (55s/12s)</strong> while early gap-out terminates E–W as soon as its 2-vehicle queue clears.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Task 8: Expected Operational Benefits & Implementation Challenges -->
+        <section class="space-y-2.5">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 font-mono text-xs flex items-center justify-center border border-cyan-500/30">8</span>
+            Expected Operational Benefits & Implementation Challenges
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/35 space-y-1.5">
+              <div class="font-bold text-emerald-300 uppercase font-mono">Operational Benefits</div>
+              <ul class="list-disc pl-4 space-y-1 text-slate-200">
+                <li><strong>55–68% Reduction in Control Delay:</strong> Cuts surge delay from &gt;75s (LOS F) down to ~26s (LOS C).</li>
+                <li><strong>Elimination of Upstream Spillback:</strong> Prevents N–S queues from blocking adjacent intersections.</li>
+                <li><strong>18–24% Lower Idling CO₂ & NOₓ Emissions:</strong> Fewer stop-start cycles for heavy BMTC buses and trucks.</li>
+                <li><strong>Zero Wasted Off-Peak Green:</strong> Early gap-out compresses off-peak cycle times (~36s) for LOS B progression.</li>
+              </ul>
+            </div>
+            <div class="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/35 space-y-1.5">
+              <div class="font-bold text-amber-300 uppercase font-mono">Implementation Challenges (Indian Urban Context)</div>
+              <ul class="list-disc pl-4 space-y-1 text-slate-200">
+                <li><strong>Weak Lane Discipline & Two-Wheeler Filtering:</strong> Requires multi-zone virtual detection rather than single-lane point loops alone.</li>
+                <li><strong>Utility Road-Cuts & Loop Maintenance:</strong> Frequent trenching can damage saw-cut inductive loops; paired overhead radar provides redundancy.</li>
+                <li><strong>Power & Communication Uptime:</strong> Requires online UPS battery backup (4+ hrs) and dual-SIM 5G/fiber failover.</li>
+                <li><strong>Mixed Traffic PCU Calibration:</strong> Dynamic PCU weights must be calibrated locally for buses, auto-rickshaws, and cars.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Three.js r128 Daylight Simulation & ATCS Engine -->
+  <script>
+    // =========================================================================
+    // 1. ENGINEERING CONFIGURATION & SIMULATION STATE (IRC SP:41 LHT)
+    // =========================================================================
+    const SIM_CONFIG = {
+      laneWidth: 3.6,
+      roadHalfWidth: 7.2,     // 2 inbound + 2 outbound lanes (4 * 3.6m = 14.4m)
+      stopLineDist: 12.2,     // Distance from intersection center to stop bar
+      loopNearDist: 13.6,     // Stop-line inductive loop center (0-2m behind stop bar)
+      loopFarDist: 45.0,      // Advance upstream detector center (45m from center)
+      spawnDist: 112.0,       // Vehicle entry distance from center
+      despawnDist: 118.0,     // Vehicle exit cleanup distance
+      minGreen: 10.0,         // Minimum green phase duration (seconds)
+      maxGreen: 55.0,         // Maximum green phase duration during surge (seconds)
+      fixedGreen: 30.0,       // Rigid fixed-time green split (seconds)
+      yellowTime: 3.0,        // Amber clearance interval (seconds)
+      allRedTime: 1.5,        // All-red safety clearance interval (seconds)
+      gapOutThreshold: 3.0,   // Critical time headway for early gap-out (seconds)
+    };
+
+    const state = {
+      scenario: 'normal',       // 'normal' | 'surge'
+      controlMode: 'adaptive',  // 'adaptive' | 'fixed'
+      simSpeed: 1,              // 1 | 2 | 5 (physics sub-step multiplier)
+      showSensors: true,
+      phase: 'NS_GREEN',        // 'NS_GREEN' | 'NS_YELLOW' | 'ALL_RED_1' | 'EW_GREEN' | 'EW_YELLOW' | 'ALL_RED_2'
+      phaseTimer: 0,
+      targetGreenDuration: 20.0,
+      simTime: 0,
+      totalCompletedVehicles: 0,
+      cumulativeDelay: 0,
+      approaches: {
+        N: { targetPCU: 510, spawnTimer: 0.4, queue: 0, occ: 12, headway: 4.2, loopActive: false, radarActive: false, timeSinceStopBarCross: 5.0 },
+        S: { targetPCU: 495, spawnTimer: 0.9, queue: 0, occ: 11, headway: 4.4, loopActive: false, radarActive: false, timeSinceStopBarCross: 5.0 },
+        E: { targetPCU: 485, spawnTimer: 0.6, queue: 0, occ: 10, headway: 4.5, loopActive: false, radarActive: false, timeSinceStopBarCross: 5.0 },
+        W: { targetPCU: 490, spawnTimer: 1.1, queue: 0, occ: 10, headway: 4.5, loopActive: false, radarActive: false, timeSinceStopBarCross: 5.0 },
+      }
+    };
+
+    // Three.js Scene Globals
+    let scene, camera, renderer, controls;
+    const vehicles = [];
+    const signalLamps = { N: null, S: null, E: null, W: null };
+    const loopMeshes = { N: { near: [], far: [] }, S: { near: [], far: [] }, E: { near: [], far: [] }, W: { near: [], far: [] } };
+    const sensorGroup = new THREE.Group();
+    const telemetryPackets = [];
+    let telemetryCurve = null;
+    let tccBeaconMesh = null;
+
+    // Smooth camera preset transition state
+    const cameraTween = {
+      active: false,
+      targetPos: new THREE.Vector3(46, 38, 46),
+      targetLook: new THREE.Vector3(0, 1.5, 0)
+    };
+
+    // =========================================================================
+    // 2. INITIALIZE BRIGHT SUNLIT DAYLIGHT 3D SCENE & ORBIT CONTROLS
+    // =========================================================================
+    function initScene() {
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+
+      // Bright sunny daylight sky & soft horizon fog
+      scene.background = new THREE.Color(0xbae6fd);
+      scene.fog = new THREE.FogExp2(0xdbeafe, 0.0022);
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 480);
+      camera.position.set(46, 38, 46);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.08;
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.065;
+      controls.maxPolarAngle = Math.PI / 2 - 0.04;
+      controls.minDistance = 12;
+      controls.maxDistance = 155;
+      controls.target.set(0, 1.5, 0);
+      controls.update();
+
+      // Cancel preset tween immediately if user manually drags/zooms
+      controls.addEventListener('start', () => {
+        cameraTween.active = false;
+      });
+
+      // Daylight Illumination Rig:
+      // 1. Soft Ambient Fill
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+      scene.add(ambientLight);
+
+      // 2. Bright Sky-Ground Hemisphere Light
+      const hemiLight = new THREE.HemisphereLight(0x93c5fd, 0x64748b, 1.15);
+      hemiLight.position.set(0, 80, 0);
+      scene.add(hemiLight);
+
+      // 3. Strong Warm Directional Sunlight with 2048x2048 PCFSoftShadowMap
+      const sunLight = new THREE.DirectionalLight(0xfffbeb, 2.1);
+      sunLight.position.set(80, 130, 70);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 15;
+      sunLight.shadow.camera.far = 310;
+      const d = 85;
+      sunLight.shadow.camera.left = -d;
+      sunLight.shadow.camera.right = d;
+      sunLight.shadow.camera.top = d;
+      sunLight.shadow.camera.bottom = -d;
+      sunLight.shadow.bias = -0.0004;
+      scene.add(sunLight);
+
+      buildDaylightEnvironmentAndRoads();
+      buildSignalMastArms();
+      buildSensorsAndITS();
+      scene.add(sensorGroup);
+
+      seedInitialNormalTraffic();
+      update3DSignalVisuals();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+      if (!camera || !renderer) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // =========================================================================
+    // 3. BUILD DAYLIGHT 4-ARM LHT INTERSECTION, PARK VERGES & SUNLIT BUILDINGS
+    // =========================================================================
+    function buildDaylightEnvironmentAndRoads() {
+      // Base sunlit parkland / urban earth plane
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x86efac, roughness: 0.9, metalness: 0.0 });
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(420, 420), groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.02;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Crisp Dark Asphalt Roadways (#2b313a)
+      const asphaltMat = new THREE.MeshStandardMaterial({ color: 0x2b313a, roughness: 0.85, metalness: 0.06 });
+      const nsRoad = new THREE.Mesh(new THREE.BoxGeometry(14.4, 0.04, 270), asphaltMat);
+      nsRoad.position.y = 0.0;
+      nsRoad.receiveShadow = true;
+      scene.add(nsRoad);
+
+      const ewRoad = new THREE.Mesh(new THREE.BoxGeometry(270, 0.04, 14.4), asphaltMat);
+      ewRoad.position.y = 0.002;
+      ewRoad.receiveShadow = true;
+      scene.add(ewRoad);
+
+      // Double-Yellow Centerlines & Crisp White Lane / Stop Markings
+      const yellowMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+      const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+      const addStrip = (w, d, x, z, mat) => {
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(x, 0.026, z);
+        scene.add(mesh);
+      };
+
+      [-0.16, 0.16].forEach(offset => {
+        addStrip(0.15, 118, offset, -71.2, yellowMat);
+        addStrip(0.15, 118, offset, 71.2, yellowMat);
+        addStrip(118, 0.15, -71.2, offset, yellowMat);
+        addStrip(118, 0.15, 71.2, offset, yellowMat);
+      });
+
+      // Dashed White Lane Dividers at +/-3.6m
+      for (let dist = 16; dist <= 128; dist += 6.5) {
+        [-3.6, 3.6].forEach(laneSep => {
+          addStrip(0.15, 3.0, laneSep, -dist, whiteMat);
+          addStrip(0.15, 3.0, laneSep, dist, whiteMat);
+          addStrip(3.0, 0.15, -dist, laneSep, whiteMat);
+          addStrip(3.0, 0.15, dist, laneSep, whiteMat);
+        });
+      }
+
+      // Solid White Stop Bars at 12.2m across INBOUND LHT lanes only
+      addStrip(6.8, 0.6, 3.6, -SIM_CONFIG.stopLineDist, whiteMat);   // North inbound
+      addStrip(6.8, 0.6, -3.6, SIM_CONFIG.stopLineDist, whiteMat);   // South inbound
+      addStrip(0.6, 6.8, SIM_CONFIG.stopLineDist, 3.6, whiteMat);    // East inbound
+      addStrip(0.6, 6.8, -SIM_CONFIG.stopLineDist, -3.6, whiteMat);  // West inbound
+
+      // Zebra Crosswalks at 9.4m
+      for (let lateral = -6.0; lateral <= 6.0; lateral += 1.5) {
+        addStrip(0.75, 2.6, lateral, -9.4, whiteMat);
+        addStrip(0.75, 2.6, lateral, 9.4, whiteMat);
+        addStrip(2.6, 0.75, -9.4, lateral, whiteMat);
+        addStrip(2.6, 0.75, 9.4, lateral, whiteMat);
+      }
+
+      // Light Concrete Sidewalks (#e2e8f0), Lush Grass Verges (#22c55e) & Sunlit Urban Buildings
+      const sidewalkMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.8 });
+      const curbMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.7 });
+      const grassMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.88 });
+
+      const quadrants = [
+        { sx: 1, sz: -1 }, // NE
+        { sx: -1, sz: 1 }, // SW
+        { sx: 1, sz: 1 },  // SE
+        { sx: -1, sz: -1 } // NW
+      ];
+
+      // Sunlit Architectural Facade Palette (Off-white, warm sandstone, light slate)
+      const buildingPalette = [0xf8fafc, 0xf3e8d2, 0xe2e8f0, 0xcbd5e1];
+      const blueGlassMat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        emissive: 0x38bdf8,
+        emissiveIntensity: 0.18,
+        roughness: 0.15,
+        metalness: 0.75
+      });
+
+      quadrants.forEach((q, qIdx) => {
+        const cx = q.sx * 71.2;
+        const cz = q.sz * 71.2;
+
+        // Concrete sidewalk apron
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(128, 0.24, 128), sidewalkMat);
+        pad.position.set(cx, 0.12, cz);
+        pad.receiveShadow = true;
+        scene.add(pad);
+
+        // Raised perimeter curb
+        const curb = new THREE.Mesh(new THREE.BoxGeometry(128.3, 0.27, 128.3), curbMat);
+        curb.position.set(cx, 0.11, cz);
+        scene.add(curb);
+
+        // Lush Green Grass Parkland Strip along avenues
+        const nsVerge = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.08, 118), grassMat);
+        nsVerge.position.set(q.sx * 11.4, 0.26, q.sz * 71.2);
+        nsVerge.receiveShadow = true;
+        scene.add(nsVerge);
+
+        const ewVerge = new THREE.Mesh(new THREE.BoxGeometry(118, 0.08, 3.4), grassMat);
+        ewVerge.position.set(q.sx * 71.2, 0.26, q.sz * 11.4);
+        ewVerge.receiveShadow = true;
+        scene.add(ewVerge);
+
+        // Bright Sunlit Urban Buildings with Reflective Blue-Tinted Windows
+        const bConfigs = [
+          { dx: 25, dz: 25, w: 18, h: 22 + (qIdx % 2) * 7, d: 18 },
+          { dx: 50, dz: 23, w: 20, h: 16, d: 16 },
+          { dx: 23, dz: 50, w: 16, h: 19, d: 20 },
+        ];
+        bConfigs.forEach((b, bIdx) => {
+          const bMat = new THREE.MeshStandardMaterial({
+            color: buildingPalette[(qIdx + bIdx) % buildingPalette.length],
+            roughness: 0.55,
+            metalness: 0.1
+          });
+          const bMesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), bMat);
+          bMesh.position.set(q.sx * b.dx, b.h / 2 + 0.24, q.sz * b.dz);
+          bMesh.castShadow = true;
+          bMesh.receiveShadow = true;
+          scene.add(bMesh);
+
+          // Roof parapet trim
+          const roofTrim = new THREE.Mesh(
+            new THREE.BoxGeometry(b.w + 0.4, 0.45, b.d + 0.4),
+            new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.6 })
+          );
+          roofTrim.position.set(q.sx * b.dx, b.h + 0.35, q.sz * b.dz);
+          scene.add(roofTrim);
+
+          // Reflective blue-tinted architectural window bands
+          for (let wy = 4; wy < b.h - 2; wy += 4.0) {
+            const winBand = new THREE.Mesh(
+              new THREE.BoxGeometry(b.w + 0.16, 1.35, b.d + 0.16),
+              blueGlassMat
+            );
+            winBand.position.set(q.sx * b.dx, wy, q.sz * b.dz);
+            scene.add(winBand);
+          }
+        });
+
+        // Roadside Streetlights & Lush Green Trees along verges
+        [22, 46, 72].forEach((offset, idx) => {
+          addStreetLight(q.sx * 8.8, q.sz * offset, q.sx < 0 ? 0 : Math.PI);
+          if (idx < 2) {
+            addDaylightTree(q.sx * 11.4, q.sz * (offset + 9));
+            addDaylightTree(q.sx * (offset + 9), q.sz * 11.4);
+          }
+        });
+      });
+    }
+
+    function addStreetLight(x, z, rotY) {
+      const poleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.3 });
+      const group = new THREE.Group();
+      group.position.set(x, 0.24, z);
+      group.rotation.y = rotY;
+
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 6.8, 8), poleMat);
+      pole.position.y = 3.4;
+      pole.castShadow = true;
+      group.add(pole);
+
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.08), poleMat);
+      arm.position.set(0.8, 6.75, 0);
+      group.add(arm);
+
+      const lamp = new THREE.Mesh(
+        new THREE.BoxGeometry(0.55, 0.1, 0.26),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.5 })
+      );
+      lamp.position.set(1.5, 6.68, 0);
+      group.add(lamp);
+
+      scene.add(group);
+    }
+
+    function addDaylightTree(x, z) {
+      const group = new THREE.Group();
+      group.position.set(x, 0.28, z);
+
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.27, 2.2, 8),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.88 })
+      );
+      trunk.position.y = 1.1;
+      trunk.castShadow = true;
+      group.add(trunk);
+
+      const crownMat1 = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.75 });
+      const crownMat2 = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.72 });
+
+      const crown1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6, 1), crownMat1);
+      crown1.position.y = 3.05;
+      crown1.castShadow = true;
+      crown1.receiveShadow = true;
+      group.add(crown1);
+
+      const crown2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.15, 1), crownMat2);
+      crown2.position.set(0.45, 4.15, 0.3);
+      crown2.castShadow = true;
+      group.add(crown2);
+
+      scene.add(group);
+    }
+
+    // =========================================================================
+    // 4. BUILD 1.6x HIGH-VISIBILITY CANTILEVER SIGNALS & CORNER REPEATERS
+    // =========================================================================
+    const haloTextures = {};
+
+    function getSignalHaloTexture(rgbaCore, rgbaMid) {
+      const key = rgbaCore + rgbaMid;
+      if (haloTextures[key]) return haloTextures[key];
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+      grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+      grad.addColorStop(0.24, rgbaCore);
+      grad.addColorStop(0.58, rgbaMid);
+      grad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(canvas);
+      haloTextures[key] = tex;
+      return tex;
+    }
+
+    function createSignalHeadAssembly(scale, redList, yellowList, greenList) {
+      const headGroup = new THREE.Group();
+
+      const borderMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 }); // High-contrast yellow border
+      const backingMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.7, metalness: 0.2 });
+      const housingMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.55, metalness: 0.3 });
+      const hoodMat = new THREE.MeshStandardMaterial({ color: 0x050811, roughness: 0.65, side: THREE.DoubleSide });
+
+      // Dark matte charcoal backing board with high-contrast yellow border facing approaching drivers (-Z local)
+      const bw = 1.02 * scale;
+      const bh = 2.46 * scale;
+      const borderPlate = new THREE.Mesh(
+        new THREE.BoxGeometry(bw + 0.11 * scale, bh + 0.11 * scale, 0.04 * scale),
+        borderMat
+      );
+      borderPlate.position.z = -0.03 * scale;
+      headGroup.add(borderPlate);
+
+      const backingBoard = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.08 * scale), backingMat);
+      backingBoard.position.z = -0.05 * scale;
+      headGroup.add(backingBoard);
+
+      // Signal housing box
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.72 * scale, 2.12 * scale, 0.48 * scale), housingMat);
+      housing.position.z = -0.25 * scale;
+      housing.castShadow = true;
+      headGroup.add(housing);
+
+      const buildAspect = (yOff, colorHex, rgbaCore, rgbaMid, targetList) => {
+        const lensRadius = 0.275 * scale; // At 1.6x -> ~0.44 radius large spherical lens
+        const mat = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          emissive: colorHex,
+          emissiveIntensity: 0.1,
+          roughness: 0.18,
+          metalness: 0.05
+        });
+        const lens = new THREE.Mesh(new THREE.SphereGeometry(lensRadius, 18, 18), mat);
+        lens.position.set(0, yOff, -0.47 * scale);
+        headGroup.add(lens);
+
+        // Deep sun visor / hood for crisp daylight contrast
+        const hoodGeo = new THREE.CylinderGeometry(
+          lensRadius * 1.14,
+          lensRadius * 1.14,
+          0.42 * scale,
+          16,
+          1,
+          true,
+          -Math.PI * 0.62,
+          Math.PI * 1.24
+        );
+        const hood = new THREE.Mesh(hoodGeo, hoodMat);
+        hood.rotation.x = Math.PI / 2;
+        hood.position.set(0, yOff, -0.62 * scale);
+        headGroup.add(hood);
+
+        // Daylight-visible radial glow sprite
+        const haloMat = new THREE.SpriteMaterial({
+          map: getSignalHaloTexture(rgbaCore, rgbaMid),
+          transparent: true,
+          opacity: 0.0,
+          depthWrite: false
+        });
+        const halo = new THREE.Sprite(haloMat);
+        const haloSize = lensRadius * 4.6;
+        halo.scale.set(haloSize, haloSize, 1);
+        halo.position.set(0, yOff, -0.72 * scale);
+        headGroup.add(halo);
+
+        targetList.push({ mat, halo });
+      };
+
+      const spacing = 0.65 * scale;
+      buildAspect(spacing, 0xef4444, 'rgba(239, 68, 68, 0.95)', 'rgba(220, 38, 38, 0.45)', redList);
+      buildAspect(0, 0xf59e0b, 'rgba(245, 158, 11, 0.95)', 'rgba(217, 119, 6, 0.45)', yellowList);
+      buildAspect(-spacing, 0x10b981, 'rgba(16, 185, 129, 0.95)', 'rgba(5, 150, 105, 0.45)', greenList);
+
+      return headGroup;
+    }
+
+    function buildSignalMastArms() {
+      const poleMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.75, roughness: 0.28 });
+      const camMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.85, roughness: 0.22 });
+
+      const masts = [
+        { arm: 'N', baseX: 8.6, baseZ: -12.2, rotY: 0 },
+        { arm: 'S', baseX: -8.6, baseZ: 12.2, rotY: Math.PI },
+        { arm: 'E', baseX: 12.2, baseZ: 8.6, rotY: -Math.PI / 2 },
+        { arm: 'W', baseX: -12.2, baseZ: -8.6, rotY: Math.PI / 2 },
+      ];
+
+      masts.forEach(m => {
+        const group = new THREE.Group();
+        group.position.set(m.baseX, 0, m.baseZ);
+        group.rotation.y = m.rotY;
+
+        // Vertical Mast Pole (7.8m tall)
+        const vPole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 7.8, 12), poleMat);
+        vPole.position.y = 3.9;
+        vPole.castShadow = true;
+        group.add(vPole);
+
+        // Horizontal Cantilever Mast Arm spanning both inbound lanes (7.8m reach)
+        const hArm = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.18, 7.8, 10), poleMat);
+        hArm.rotation.z = Math.PI / 2;
+        hArm.position.set(-3.9, 7.45, 0);
+        hArm.castShadow = true;
+        group.add(hArm);
+
+        const redMeshes = [];
+        const yellowMeshes = [];
+        const greenMeshes = [];
+
+        // 1. Two 1.6x Overhead Cantilever Signal Heads over Outer & Inner inbound lanes
+        [-3.2, -6.8].forEach((offsetX, idx) => {
+          const overheadHead = createSignalHeadAssembly(1.6, redMeshes, yellowMeshes, greenMeshes);
+          overheadHead.position.set(offsetX, 6.4, -0.15);
+          group.add(overheadHead);
+
+          // Compact dark metallic AI Edge Vision camera housing on outer mast (NO green cones)
+          if (idx === 0) {
+            const bracket = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.55, 8), poleMat);
+            bracket.position.set(offsetX + 0.95, 7.72, -0.1);
+            group.add(bracket);
+
+            const camBody = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.28, 0.58), camMat);
+            camBody.position.set(offsetX + 0.95, 7.98, -0.25);
+            camBody.rotation.x = 0.22;
+            camBody.castShadow = true;
+            group.add(camBody);
+
+            const camLens = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.08, 0.08, 0.1, 12),
+              new THREE.MeshStandardMaterial({ color: 0x020617, metalness: 0.95, roughness: 0.1 })
+            );
+            camLens.rotation.x = Math.PI / 2 + 0.22;
+            camLens.position.set(offsetX + 0.95, 7.91, -0.55);
+            group.add(camLens);
+          }
+        });
+
+        // 2. Corner Post-Mounted Repeater Signal Head (1.3x scale)
+        const repeaterHead = createSignalHeadAssembly(1.3, redMeshes, yellowMeshes, greenMeshes);
+        repeaterHead.position.set(0.0, 3.6, -0.28);
+        group.add(repeaterHead);
+
+        scene.add(group);
+        signalLamps[m.arm] = { red: redMeshes, yellow: yellowMeshes, green: greenMeshes };
+      });
+    }
+
+    // =========================================================================
+    // 5. BUILD EMBEDDED INDUCTIVE LOOPS, ATCS CABINET, 5G RSU & TCC HUB TOWER
+    // =========================================================================
+    function buildSensorsAndITS() {
+      const approaches = [
+        { arm: 'N', lanes: [1.8, 5.4], sign: -1, isNS: true },
+        { arm: 'S', lanes: [-1.8, -5.4], sign: 1, isNS: true },
+        { arm: 'E', lanes: [1.8, 5.4], sign: 1, isNS: false },
+        { arm: 'W', lanes: [-1.8, -5.4], sign: -1, isNS: false },
+      ];
+
+      approaches.forEach(cfg => {
+        cfg.lanes.forEach(laneCoord => {
+          // Stop-Line Inductive Loop (0-2m behind stop bar)
+          const nearMat = new THREE.MeshBasicMaterial({
+            color: 0xfacc15,
+            transparent: true,
+            opacity: 0.85,
+            side: THREE.DoubleSide
+          });
+          const nearGeo = new THREE.RingGeometry(0.95, 1.26, 4);
+          const nearMesh = new THREE.Mesh(nearGeo, nearMat);
+          nearMesh.rotation.x = -Math.PI / 2;
+          nearMesh.rotation.z = Math.PI / 4;
+
+          // 45m Advance Upstream Detector Loop
+          const farMat = new THREE.MeshBasicMaterial({
+            color: 0x06b6d4,
+            transparent: true,
+            opacity: 0.78,
+            side: THREE.DoubleSide
+          });
+          const farMesh = new THREE.Mesh(nearGeo.clone(), farMat);
+          farMesh.rotation.x = -Math.PI / 2;
+          farMesh.rotation.z = Math.PI / 4;
+
+          if (cfg.isNS) {
+            nearMesh.position.set(laneCoord, 0.036, cfg.sign * SIM_CONFIG.loopNearDist);
+            farMesh.position.set(laneCoord, 0.036, cfg.sign * SIM_CONFIG.loopFarDist);
+          } else {
+            nearMesh.position.set(cfg.sign * SIM_CONFIG.loopNearDist, 0.036, laneCoord);
+            farMesh.position.set(cfg.sign * SIM_CONFIG.loopFarDist, 0.036, laneCoord);
+          }
+
+          sensorGroup.add(nearMesh);
+          sensorGroup.add(farMesh);
+          loopMeshes[cfg.arm].near.push(nearMesh);
+          loopMeshes[cfg.arm].far.push(farMesh);
+        });
+      });
+
+      // Roadside ATCS Controller Cabinet + 5G RSU Mast at NE Corner (x=10.4, z=-10.4)
+      const cabinetGroup = new THREE.Group();
+      cabinetGroup.position.set(10.4, 0.24, -10.4);
+
+      const plinth = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6, 0.2, 1.2),
+        new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8 })
+      );
+      plinth.position.y = 0.1;
+      cabinetGroup.add(plinth);
+
+      const cabinet = new THREE.Mesh(
+        new THREE.BoxGeometry(1.3, 1.75, 0.85),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.3 })
+      );
+      cabinet.position.y = 1.05;
+      cabinet.castShadow = true;
+      cabinetGroup.add(cabinet);
+
+      const statusLed = new THREE.Mesh(
+        new THREE.BoxGeometry(1.1, 0.08, 0.88),
+        new THREE.MeshBasicMaterial({ color: 0x22d3ee })
+      );
+      statusLed.position.y = 1.65;
+      cabinetGroup.add(statusLed);
+
+      const rsuPole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.08, 2.8, 8),
+        new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 })
+      );
+      rsuPole.position.y = 3.2;
+      cabinetGroup.add(rsuPole);
+
+      const rsuUnit = new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 0.55, 0.25),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0ea5e9, emissiveIntensity: 0.5 })
+      );
+      rsuUnit.position.y = 4.55;
+      cabinetGroup.add(rsuUnit);
+
+      scene.add(cabinetGroup);
+
+      // Elevated Traffic Control Centre (TCC) Hub Tower at (x=25, z=-25)
+      const tccGroup = new THREE.Group();
+      tccGroup.position.set(25, 0.24, -25);
+
+      const towerBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.2, 3.8, 12, 8),
+        new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.45, roughness: 0.35 })
+      );
+      towerBase.position.y = 6.0;
+      towerBase.castShadow = true;
+      tccGroup.add(towerBase);
+
+      const controlDeck = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.4, 3.5, 2.8, 8),
+        new THREE.MeshStandardMaterial({
+          color: 0x0f172a,
+          emissive: 0x0284c7,
+          emissiveIntensity: 0.25,
+          metalness: 0.7,
+          roughness: 0.2
+        })
+      );
+      controlDeck.position.y = 13.4;
+      controlDeck.castShadow = true;
+      tccGroup.add(controlDeck);
+
+      const glassBand = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.46, 4.46, 1.1, 8),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 })
+      );
+      glassBand.position.y = 13.5;
+      tccGroup.add(glassBand);
+
+      const spire = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.18, 4.5, 8),
+        new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.85 })
+      );
+      spire.position.y = 17.0;
+      tccGroup.add(spire);
+
+      tccBeaconMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.34, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x10b981 })
+      );
+      tccBeaconMesh.position.y = 19.3;
+      tccGroup.add(tccBeaconMesh);
+
+      scene.add(tccGroup);
+
+      // Curved 5G / Fiber Telemetry Arc & Streaming Data Packets (RSU -> TCC)
+      const rsuPos = new THREE.Vector3(10.4, 4.9, -10.4);
+      const tccPos = new THREE.Vector3(25.0, 14.2, -25.0);
+      const midPos = new THREE.Vector3(17.7, 13.5, -17.7);
+      telemetryCurve = new THREE.QuadraticBezierCurve3(rsuPos, midPos, tccPos);
+
+      const arcPts = telemetryCurve.getPoints(36);
+      const arcGeo = new THREE.BufferGeometry().setFromPoints(arcPts);
+      const arcMat = new THREE.LineBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.65 });
+      const arcLine = new THREE.Line(arcGeo, arcMat);
+      sensorGroup.add(arcLine);
+
+      for (let i = 0; i < 6; i++) {
+        const pkt = new THREE.Mesh(
+          new THREE.SphereGeometry(0.26, 10, 10),
+          new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x0284c7 : 0x10b981 })
+        );
+        sensorGroup.add(pkt);
+        telemetryPackets.push({ mesh: pkt, t: i / 6 });
+      }
+    }
+
+    // =========================================================================
+    // 6. MULTI-CLASS INDIAN URBAN VEHICLES & LHT PATH GENERATOR
+    // =========================================================================
+    const VEHICLE_CLASSES = [
+      { type: 'Sedan', pcu: 1.0, len: 4.4, wid: 1.85, hgt: 1.45, weight: 0.44, colors: [0xf8fafc, 0x0284c7, 0x64748b, 0xe11d48, 0xf59e0b] },
+      { type: 'SUV',   pcu: 1.2, len: 4.8, wid: 2.02, hgt: 1.78, weight: 0.28, colors: [0xffffff, 0x334155, 0x0ea5e9, 0xd97706] },
+      { type: 'Bus',   pcu: 2.5, len: 9.8, wid: 2.45, hgt: 3.15, weight: 0.16, colors: [0x0284c7] }, // Blue/White BMTC City Bus
+      { type: 'Truck', pcu: 2.8, len: 8.4, wid: 2.38, hgt: 3.05, weight: 0.12, colors: [0xd97706, 0x475569, 0x059669] },
+    ];
+
+    function pickVehicleClass() {
+      const r = Math.random();
+      let acc = 0;
+      for (const vc of VEHICLE_CLASSES) {
+        acc += vc.weight;
+        if (r <= acc) return vc;
+      }
+      return VEHICLE_CLASSES[0];
+    }
+
+    function createVehicleMesh(vClass) {
+      const group = new THREE.Group();
+      const bodyColor = vClass.colors[Math.floor(Math.random() * vClass.colors.length)];
+      const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.35, metalness: 0.28 });
+      const glassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.12, metalness: 0.85 });
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85 });
+
+      if (vClass.type === 'Bus') {
+        const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(vClass.wid, 1.35, vClass.len), bodyMat);
+        lowerBody.position.y = 1.05;
+        lowerBody.castShadow = true;
+        group.add(lowerBody);
+
+        const upperWhite = new THREE.Mesh(
+          new THREE.BoxGeometry(vClass.wid * 0.98, 1.25, vClass.len * 0.98),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 })
+        );
+        upperWhite.position.y = 2.35;
+        upperWhite.castShadow = true;
+        group.add(upperWhite);
+
+        const winBand = new THREE.Mesh(new THREE.BoxGeometry(vClass.wid + 0.04, 0.72, vClass.len * 0.92), glassMat);
+        winBand.position.y = 2.25;
+        group.add(winBand);
+      } else if (vClass.type === 'Truck') {
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(vClass.wid * 0.94, 2.1, 2.2), bodyMat);
+        cab.position.set(0, 1.45, vClass.len * 0.34);
+        cab.castShadow = true;
+        group.add(cab);
+
+        const windshield = new THREE.Mesh(new THREE.BoxGeometry(vClass.wid * 0.88, 0.75, 0.15), glassMat);
+        windshield.position.set(0, 1.85, vClass.len * 0.48);
+        group.add(windshield);
+
+        const cargo = new THREE.Mesh(
+          new THREE.BoxGeometry(vClass.wid, 2.45, vClass.len * 0.66),
+          new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.55 })
+        );
+        cargo.position.set(0, 1.65, -vClass.len * 0.16);
+        cargo.castShadow = true;
+        group.add(cargo);
+      } else {
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(vClass.wid, vClass.hgt * 0.56, vClass.len), bodyMat);
+        chassis.position.y = vClass.hgt * 0.28 + 0.34;
+        chassis.castShadow = true;
+        group.add(chassis);
+
+        const cabin = new THREE.Mesh(
+          new THREE.BoxGeometry(vClass.wid * 0.84, vClass.hgt * 0.46, vClass.len * 0.56),
+          glassMat
+        );
+        cabin.position.set(0, vClass.hgt * 0.72 + 0.28, -vClass.len * 0.05);
+        cabin.castShadow = true;
+        group.add(cabin);
+      }
+
+      // Wheels
+      const wheelZOffsets = vClass.len > 6
+        ? [-vClass.len * 0.34, -vClass.len * 0.18, vClass.len * 0.34]
+        : [-vClass.len * 0.31, vClass.len * 0.31];
+      wheelZOffsets.forEach(wz => {
+        [-vClass.wid * 0.48, vClass.wid * 0.48].forEach(wx => {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.28, 12), wheelMat);
+          wheel.rotation.z = Math.PI / 2;
+          wheel.position.set(wx, 0.4, wz);
+          group.add(wheel);
+        });
+      });
+
+      // Headlights (+Z front)
+      const headMat = new THREE.MeshBasicMaterial({ color: 0xfef9c3 });
+      [-vClass.wid * 0.34, vClass.wid * 0.34].forEach(hx => {
+        const hl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.08), headMat);
+        hl.position.set(hx, 0.72, vClass.len / 2 + 0.02);
+        group.add(hl);
+      });
+
+      // Dynamic Glowing Brake Lights (-Z rear)
+      const brakeMat = new THREE.MeshBasicMaterial({ color: 0x7f1d1d });
+      [-vClass.wid * 0.34, vClass.wid * 0.34].forEach(bx => {
+        const bl = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.08), brakeMat);
+        bl.position.set(bx, 0.78, -vClass.len / 2 - 0.02);
+        group.add(bl);
+      });
+
+      return { group, brakeMat };
+    }
+
+    function buildVehiclePath(arm, laneIdx, turnType) {
+      const offset = laneIdx === 0 ? 5.4 : 1.8;
+      const S = SIM_CONFIG.spawnDist;
+      const B = SIM_CONFIG.stopLineDist;
+      const E = SIM_CONFIG.despawnDist;
+
+      let pts = [];
+      if (arm === 'N') {
+        if (turnType === 'left') {
+          pts = [
+            new THREE.Vector3(offset, 0.02, -S),
+            new THREE.Vector3(offset, 0.02, -B),
+            new THREE.Vector3(offset + 1.4, 0.02, -offset - 1.4),
+            new THREE.Vector3(B, 0.02, -offset),
+            new THREE.Vector3(E, 0.02, -offset)
+          ];
+        } else {
+          pts = [
+            new THREE.Vector3(offset, 0.02, -S),
+            new THREE.Vector3(offset, 0.02, -B),
+            new THREE.Vector3(offset, 0.02, B),
+            new THREE.Vector3(offset, 0.02, E)
+          ];
+        }
+      } else if (arm === 'S') {
+        if (turnType === 'left') {
+          pts = [
+            new THREE.Vector3(-offset, 0.02, S),
+            new THREE.Vector3(-offset, 0.02, B),
+            new THREE.Vector3(-offset - 1.4, 0.02, offset + 1.4),
+            new THREE.Vector3(-B, 0.02, offset),
+            new THREE.Vector3(-E, 0.02, offset)
+          ];
+        } else {
+          pts = [
+            new THREE.Vector3(-offset, 0.02, S),
+            new THREE.Vector3(-offset, 0.02, B),
+            new THREE.Vector3(-offset, 0.02, -B),
+            new THREE.Vector3(-offset, 0.02, -E)
+          ];
+        }
+      } else if (arm === 'E') {
+        if (turnType === 'left') {
+          pts = [
+            new THREE.Vector3(S, 0.02, offset),
+            new THREE.Vector3(B, 0.02, offset),
+            new THREE.Vector3(offset + 1.4, 0.02, offset + 1.4),
+            new THREE.Vector3(offset, 0.02, B),
+            new THREE.Vector3(offset, 0.02, E)
+          ];
+        } else {
+          pts = [
+            new THREE.Vector3(S, 0.02, offset),
+            new THREE.Vector3(B, 0.02, offset),
+            new THREE.Vector3(-B, 0.02, offset),
+            new THREE.Vector3(-E, 0.02, offset)
+          ];
+        }
+      } else if (arm === 'W') {
+        if (turnType === 'left') {
+          pts = [
+            new THREE.Vector3(-S, 0.02, -offset),
+            new THREE.Vector3(-B, 0.02, -offset),
+            new THREE.Vector3(-offset - 1.4, 0.02, -offset - 1.4),
+            new THREE.Vector3(-offset, 0.02, -B),
+            new THREE.Vector3(-offset, 0.02, -E)
+          ];
+        } else {
+          pts = [
+            new THREE.Vector3(-S, 0.02, -offset),
+            new THREE.Vector3(-B, 0.02, -offset),
+            new THREE.Vector3(B, 0.02, -offset),
+            new THREE.Vector3(E, 0.02, -offset)
+          ];
+        }
+      }
+
+      const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.25);
+      const totalLen = curve.getLength();
+      const approachLen = S - B;
+      return { curve, totalLen, approachLen };
+    }
+
+    function spawnVehicle(arm, initialDist = 0, forcedLane = null) {
+      const laneIdx = forcedLane !== null ? forcedLane : (Math.random() < 0.52 ? 0 : 1);
+      const turnType = (laneIdx === 0 && Math.random() < 0.22) ? 'left' : 'straight';
+
+      // Prevent overlapping spawns
+      for (const v of vehicles) {
+        if (v.arm === arm && v.laneIdx === laneIdx && Math.abs(v.dist - initialDist) < 12.2) {
+          return false;
+        }
+      }
+
+      const vClass = pickVehicleClass();
+      const { group, brakeMat } = createVehicleMesh(vClass);
+      const pathData = buildVehiclePath(arm, laneIdx, turnType);
+      const clampedDist = Math.min(pathData.approachLen - 5.5, Math.max(0, initialDist));
+
+      const u0 = clampedDist / pathData.totalLen;
+      const pos = pathData.curve.getPointAt(u0);
+      const tangent = pathData.curve.getTangentAt(u0);
+      group.position.copy(pos);
+      group.lookAt(pos.clone().add(tangent));
+      scene.add(group);
+
+      vehicles.push({
+        arm,
+        laneIdx,
+        turnType,
+        vClass,
+        mesh: group,
+        brakeMat,
+        pathData,
+        dist: clampedDist,
+        speed: initialDist > 0 ? 7.8 : 11.8,
+        maxSpeed: (vClass.type === 'Bus' || vClass.type === 'Truck') ? 10.6 : 13.4,
+        waitTime: 0,
+        crossedStopBar: false,
+        countedDelay: false
+      });
+
+      return true;
+    }
+
+    function seedInitialNormalTraffic() {
+      ['N', 'S', 'E', 'W'].forEach((arm, idx) => {
+        spawnVehicle(arm, 42 + idx * 5, 0);
+        spawnVehicle(arm, 16 + idx * 4, 1);
+      });
+    }
+
+    // =========================================================================
+    // 7. ADAPTIVE SIGNAL CONTROLLER & CAR-FOLLOWING PHYSICS STEP
+    // =========================================================================
+    function isArmGreen(arm) {
+      if (state.phase === 'NS_GREEN' && (arm === 'N' || arm === 'S')) return true;
+      if (state.phase === 'EW_GREEN' && (arm === 'E' || arm === 'W')) return true;
+      return false;
+    }
+
+    function isArmYellow(arm) {
+      if (state.phase === 'NS_YELLOW' && (arm === 'N' || arm === 'S')) return true;
+      if (state.phase === 'EW_YELLOW' && (arm === 'E' || arm === 'W')) return true;
+      return false;
+    }
+
+    function updateSignalController(dt) {
+      state.phaseTimer += dt;
+
+      if (state.phase === 'NS_GREEN' || state.phase === 'EW_GREEN') {
+        const activeArms = state.phase === 'NS_GREEN' ? ['N', 'S'] : ['E', 'W'];
+        const opposingArms = state.phase === 'NS_GREEN' ? ['E', 'W'] : ['N', 'S'];
+
+        if (state.controlMode === 'fixed') {
+          state.targetGreenDuration = SIM_CONFIG.fixedGreen;
+          if (state.phaseTimer >= SIM_CONFIG.fixedGreen) {
+            transitionPhase(state.phase === 'NS_GREEN' ? 'NS_YELLOW' : 'EW_YELLOW');
+          }
+        } else {
+          // Adaptive ITS Control Logic
+          const activeQueue = state.approaches[activeArms[0]].queue + state.approaches[activeArms[1]].queue;
+          const opposingQueue = state.approaches[opposingArms[0]].queue + state.approaches[opposingArms[1]].queue;
+          const activeOcc = Math.max(state.approaches[activeArms[0]].occ, state.approaches[activeArms[1]].occ);
+          const minTimeSinceCross = Math.min(
+            state.approaches[activeArms[0]].timeSinceStopBarCross,
+            state.approaches[activeArms[1]].timeSinceStopBarCross
+          );
+
+          if (activeQueue >= 6 || activeOcc >= 28) {
+            state.targetGreenDuration = SIM_CONFIG.maxGreen;
+          } else if (activeQueue >= 3) {
+            state.targetGreenDuration = 34.0;
+          } else {
+            state.targetGreenDuration = 18.0;
+          }
+
+          if (state.phaseTimer >= SIM_CONFIG.minGreen) {
+            if (state.phaseTimer >= state.targetGreenDuration) {
+              logDecision(
+                `MAX GREEN (${Math.round(state.targetGreenDuration)}s) reached on ${activeArms.join('–')}. Switching phase.`,
+                'text-amber-300'
+              );
+              transitionPhase(state.phase === 'NS_GREEN' ? 'NS_YELLOW' : 'EW_YELLOW');
+            } else if (activeQueue === 0 && minTimeSinceCross >= SIM_CONFIG.gapOutThreshold && opposingQueue > 0) {
+              logDecision(
+                `GAP-OUT on ${activeArms.join('–')} at ${state.phaseTimer.toFixed(1)}s (Hdwy > 3.0s). Serving ${opposingArms.join('–')}.`,
+                'text-emerald-300'
+              );
+              transitionPhase(state.phase === 'NS_GREEN' ? 'NS_YELLOW' : 'EW_YELLOW');
+            }
+          }
+        }
+      } else if (state.phase === 'NS_YELLOW') {
+        if (state.phaseTimer >= SIM_CONFIG.yellowTime) transitionPhase('ALL_RED_1');
+      } else if (state.phase === 'ALL_RED_1') {
+        if (state.phaseTimer >= SIM_CONFIG.allRedTime) transitionPhase('EW_GREEN');
+      } else if (state.phase === 'EW_YELLOW') {
+        if (state.phaseTimer >= SIM_CONFIG.yellowTime) transitionPhase('ALL_RED_2');
+      } else if (state.phase === 'ALL_RED_2') {
+        if (state.phaseTimer >= SIM_CONFIG.allRedTime) transitionPhase('NS_GREEN');
+      }
+    }
+
+    function transitionPhase(nextPhase) {
+      state.phase = nextPhase;
+      state.phaseTimer = 0;
+
+      if (nextPhase === 'NS_GREEN' || nextPhase === 'EW_GREEN') {
+        const arms = nextPhase === 'NS_GREEN' ? ['N', 'S'] : ['E', 'W'];
+        arms.forEach(a => {
+          state.approaches[a].timeSinceStopBarCross = 0;
+        });
+        if (state.controlMode === 'adaptive') {
+          const q = state.approaches[arms[0]].queue + state.approaches[arms[1]].queue;
+          if (q >= 6) {
+            state.targetGreenDuration = SIM_CONFIG.maxGreen;
+            logDecision(`${arms.join('–')} SURGE DETECTED (Queue=${q}): Extending Green up to 55s.`, 'text-cyan-300');
+          } else {
+            state.targetGreenDuration = 20.0;
+          }
+        } else {
+          state.targetGreenDuration = SIM_CONFIG.fixedGreen;
+        }
+      }
+      update3DSignalVisuals();
+    }
+
+    function updateVehiclesAndSpawns(dt) {
+      ['N', 'S', 'E', 'W'].forEach(arm => {
+        const app = state.approaches[arm];
+        app.spawnTimer -= dt;
+        app.timeSinceStopBarCross += dt;
+        app.loopActive = false;
+        app.radarActive = false;
+
+        if (app.spawnTimer <= 0) {
+          const vehPerHour = app.targetPCU / 1.35;
+          const meanInterval = 3600 / Math.max(120, vehPerHour);
+          const jitter = 0.65 + Math.random() * 0.7;
+          app.spawnTimer = meanInterval * jitter;
+          spawnVehicle(arm, 0, null);
+        }
+      });
+
+      const laneBuckets = {};
+      for (const v of vehicles) {
+        const key = `${v.arm}_${v.laneIdx}`;
+        if (!laneBuckets[key]) laneBuckets[key] = [];
+        laneBuckets[key].push(v);
+      }
+      for (const key in laneBuckets) {
+        laneBuckets[key].sort((a, b) => b.dist - a.dist);
+      }
+
+      ['N', 'S', 'E', 'W'].forEach(a => { state.approaches[a].queue = 0; });
+
+      for (let i = vehicles.length - 1; i >= 0; i--) {
+        const v = vehicles[i];
+        const bucket = laneBuckets[`${v.arm}_${v.laneIdx}`];
+        const idxInLane = bucket.indexOf(v);
+        const leader = idxInLane > 0 ? bucket[idxInLane - 1] : null;
+
+        const stopDist = v.pathData.approachLen;
+        const distToStopBar = stopDist - v.dist;
+        const green = isArmGreen(v.arm);
+        const yellow = isArmYellow(v.arm);
+
+        let desiredSpeed = v.maxSpeed;
+        let mustStopAtBar = false;
+
+        if (!v.crossedStopBar) {
+          if (!green) {
+            if (!yellow || distToStopBar > 14.0 || v.speed < 6.5) {
+              mustStopAtBar = true;
+            }
+          }
+        }
+
+        let gapToObstacle = 999;
+        let obstacleSpeed = v.maxSpeed;
+
+        if (leader) {
+          const bumperGap = (leader.dist - leader.vClass.len * 0.5) - (v.dist + v.vClass.len * 0.5);
+          if (bumperGap < gapToObstacle) {
+            gapToObstacle = bumperGap;
+            obstacleSpeed = leader.speed;
+          }
+        }
+
+        if (mustStopAtBar) {
+          const barGap = distToStopBar - v.vClass.len * 0.5 - 0.6;
+          if (barGap < gapToObstacle) {
+            gapToObstacle = barGap;
+            obstacleSpeed = 0;
+          }
+        }
+
+        const safeStandstill = 2.4;
+        const desiredGap = safeStandstill + v.speed * 1.15;
+        let accel = 2.6;
+
+        if (gapToObstacle < desiredGap) {
+          const closingSpeed = Math.max(0, v.speed - obstacleSpeed);
+          const brakingDecel = 3.2 + (closingSpeed * closingSpeed) / Math.max(1.2, 2 * Math.max(0.4, gapToObstacle - 0.8));
+          accel = -Math.min(7.5, brakingDecel);
+          if (gapToObstacle <= 1.1 && obstacleSpeed < 0.2) {
+            v.speed = 0;
+            accel = 0;
+          }
+        } else if (v.speed < desiredSpeed) {
+          accel = 2.5 * (1 - Math.pow(v.speed / desiredSpeed, 3));
+        } else {
+          accel = -1.2;
+        }
+
+        v.speed = Math.max(0, Math.min(v.maxSpeed, v.speed + accel * dt));
+        v.dist += v.speed * dt;
+
+        // Dynamic glowing brake lights
+        const isBraking = (accel < -0.45) || (v.speed < 0.4 && !green);
+        v.brakeMat.color.setHex(isBraking ? 0xff1e42 : 0x6b141a);
+
+        // Queue & wait time accounting
+        if (!v.crossedStopBar && v.speed < 2.2) {
+          state.approaches[v.arm].queue++;
+          v.waitTime += dt;
+        }
+
+        // Stop-Line Inductive Loop (0-2m behind stop bar) & 45m Advance Detector
+        const distFromCenter = stopDist + SIM_CONFIG.stopLineDist - v.dist;
+        if (distFromCenter >= 11.8 && distFromCenter <= 16.5) {
+          state.approaches[v.arm].loopActive = true;
+        }
+        if (distFromCenter >= 42.0 && distFromCenter <= 48.5) {
+          state.approaches[v.arm].radarActive = true;
+        }
+
+        // Detect stop bar crossing
+        if (!v.crossedStopBar && v.dist >= stopDist) {
+          v.crossedStopBar = true;
+          const hdw = Math.min(9.9, Math.max(1.2, state.approaches[v.arm].timeSinceStopBarCross));
+          state.approaches[v.arm].headway = hdw;
+          state.approaches[v.arm].timeSinceStopBarCross = 0;
+
+          if (!v.countedDelay) {
+            v.countedDelay = true;
+            state.totalCompletedVehicles++;
+            state.cumulativeDelay += v.waitTime;
+          }
+        }
+
+        if (v.dist >= v.pathData.totalLen - 0.5) {
+          scene.remove(v.mesh);
+          vehicles.splice(i, 1);
+          continue;
+        }
+
+        const u = Math.min(0.999, Math.max(0, v.dist / v.pathData.totalLen));
+        const pos = v.pathData.curve.getPointAt(u);
+        const tangent = v.pathData.curve.getTangentAt(u);
+        v.mesh.position.copy(pos);
+        v.mesh.lookAt(pos.clone().add(tangent));
+      }
+
+      ['N', 'S', 'E', 'W'].forEach(arm => {
+        const app = state.approaches[arm];
+        const rawOcc = Math.min(92, Math.round(app.queue * 6.5 + (app.loopActive ? 14 : 4) + (app.radarActive ? 8 : 0)));
+        app.occ = Math.round(app.occ * 0.85 + rawOcc * 0.15);
+      });
+    }
+
+    function update3DSignalVisuals() {
+      const setArmLamps = (arm, activeColor) => {
+        const l = signalLamps[arm];
+        if (!l) return;
+        l.red.forEach(item => {
+          const on = activeColor === 'red';
+          item.mat.emissiveIntensity = on ? 3.2 : 0.08;
+          item.halo.material.opacity = on ? 0.92 : 0.0;
+        });
+        l.yellow.forEach(item => {
+          const on = activeColor === 'yellow';
+          item.mat.emissiveIntensity = on ? 3.2 : 0.08;
+          item.halo.material.opacity = on ? 0.92 : 0.0;
+        });
+        l.green.forEach(item => {
+          const on = activeColor === 'green';
+          item.mat.emissiveIntensity = on ? 3.2 : 0.08;
+          item.halo.material.opacity = on ? 0.92 : 0.0;
+        });
+      };
+
+      const nsColor = state.phase === 'NS_GREEN' ? 'green' : (state.phase === 'NS_YELLOW' ? 'yellow' : 'red');
+      const ewColor = state.phase === 'EW_GREEN' ? 'green' : (state.phase === 'EW_YELLOW' ? 'yellow' : 'red');
+
+      setArmLamps('N', nsColor);
+      setArmLamps('S', nsColor);
+      setArmLamps('E', ewColor);
+      setArmLamps('W', ewColor);
+    }
+
+    function updateITSVisuals(dt) {
+      ['N', 'S', 'E', 'W'].forEach(arm => {
+        const app = state.approaches[arm];
+        loopMeshes[arm].near.forEach(mesh => {
+          mesh.material.color.setHex(app.loopActive ? 0xffffff : 0xfacc15);
+          mesh.material.opacity = app.loopActive ? 1.0 : 0.82;
+        });
+        loopMeshes[arm].far.forEach(mesh => {
+          mesh.material.color.setHex(app.radarActive ? 0xffffff : 0x06b6d4);
+          mesh.material.opacity = app.radarActive ? 1.0 : 0.75;
+        });
+      });
+
+      if (telemetryCurve && state.showSensors) {
+        telemetryPackets.forEach(p => {
+          p.t = (p.t + dt * 0.75) % 1.0;
+          const pt = telemetryCurve.getPointAt(p.t);
+          p.mesh.position.copy(pt);
+        });
+      }
+      if (tccBeaconMesh) {
+        const pulse = 0.85 + 0.35 * Math.sin(state.simTime * 5.0);
+        tccBeaconMesh.scale.setScalar(pulse);
+      }
+    }
+
+    // =========================================================================
+    // 8. UI CONTROLS: SCENARIO, CONTROL MODE, SPEED (1x/2x/5x) & TELEMETRY HUD
+    // =========================================================================
+    function setSimSpeed(speedVal) {
+      state.simSpeed = speedVal;
+      [1, 2, 5].forEach(s => {
+        const btn = document.getElementById(`btn-speed-${s}`);
+        if (!btn) return;
+        if (s === speedVal) {
+          btn.className = 'speed-btn px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold transition-all bg-amber-400 text-slate-950 shadow-sm cursor-pointer';
+        } else {
+          btn.className = 'speed-btn px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold transition-all text-slate-200 hover:text-white cursor-pointer';
+        }
+      });
+      const badge = document.getElementById('hud-speed-badge');
+      if (badge) {
+        badge.textContent = `${speedVal}x SPEED`;
+      }
+      logDecision(`SIMULATION SPEED: Set to ${speedVal}x real-time physics sub-stepping.`, 'text-amber-200');
+    }
+
+    function setScenario(scen) {
+      state.scenario = scen;
+      const btnNorm = document.getElementById('btn-scenario-normal');
+      const btnSurge = document.getElementById('btn-scenario-surge');
+      const banner = document.getElementById('scenario-insight-banner');
+
+      if (scen === 'normal') {
+        btnNorm.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-cyan-400 text-slate-950 shadow-sm cursor-pointer';
+        btnSurge.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 text-slate-200 hover:text-white cursor-pointer';
+
+        state.approaches.N.targetPCU = 510;
+        state.approaches.S.targetPCU = 495;
+        state.approaches.E.targetPCU = 485;
+        state.approaches.W.targetPCU = 490;
+
+        // Trim excess queued vehicles on N & S so balanced off-peak flow restores cleanly
+        const keptPerArm = { N: 0, S: 0, E: 0, W: 0 };
+        for (let i = vehicles.length - 1; i >= 0; i--) {
+          const v = vehicles[i];
+          if (!v.crossedStopBar) {
+            keptPerArm[v.arm]++;
+            if (keptPerArm[v.arm] > 2) {
+              scene.remove(v.mesh);
+              vehicles.splice(i, 1);
+            }
+          }
+        }
+
+        banner.className = 'rounded-xl p-2.5 bg-cyan-950/75 border border-cyan-400/35 text-[11px] leading-snug text-cyan-100';
+        banner.innerHTML = '<strong class="text-cyan-300">Scenario 1 (Normal Traffic):</strong> Balanced off-peak flow (~500 PCU/hr/arm). Adaptive gap-out compresses cycle length with minimal delay (LOS B).';
+        logDecision('SCENARIO 1: Normal Off-Peak Balanced Demand (~1,980 PCU/hr) active.', 'text-cyan-300');
+      } else {
+        btnSurge.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-amber-400 text-slate-950 shadow-sm cursor-pointer';
+        btnNorm.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 text-slate-200 hover:text-white cursor-pointer';
+
+        // Accelerate N-S arrival rates (~3,800 PCU/hr) while keeping E-W low (~540 PCU/hr)
+        state.approaches.N.targetPCU = 3850;
+        state.approaches.S.targetPCU = 3750;
+        state.approaches.E.targetPCU = 540;
+        state.approaches.W.targetPCU = 520;
+        state.approaches.N.spawnTimer = 0.25;
+        state.approaches.S.spawnTimer = 0.35;
+
+        // Immediately inject an instant staggered platoon of 16 multi-class vehicles on N & S
+        const burstDistances = [88, 75, 62, 49, 36, 23, 10, 0];
+        burstDistances.forEach((d, idx) => {
+          spawnVehicle('N', d, idx % 2);
+          spawnVehicle('S', d, (idx + 1) % 2);
+        });
+
+        banner.className = 'rounded-xl p-2.5 bg-amber-950/80 border border-amber-400/45 text-[11px] leading-snug text-amber-100';
+        banner.innerHTML = '<strong class="text-amber-300">Scenario 2 (Traffic Surge):</strong> Instant 16-vehicle platoon + 3,800 PCU/hr N–S surge vs. 540 PCU/hr E–W. Compare <em>Adaptive ITS</em> vs <em>Fixed-Time</em>!';
+        logDecision('SCENARIO 2: Instant 16-veh N–S Surge Platoon + 3,800 PCU/hr arrival!', 'text-amber-300');
+      }
+    }
+
+    function setControlMode(mode) {
+      state.controlMode = mode;
+      const btnAdp = document.getElementById('btn-mode-adaptive');
+      const btnFix = document.getElementById('btn-mode-fixed');
+      const badge = document.getElementById('hud-mode-badge');
+
+      if (mode === 'adaptive') {
+        btnAdp.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-emerald-500/30 text-emerald-200 border border-emerald-400/50 cursor-pointer';
+        btnFix.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white border border-transparent cursor-pointer';
+        badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/25 text-emerald-200 border border-emerald-400/40';
+        badge.textContent = 'ATCS ADAPTIVE';
+        logDecision('CONTROL MODE: Adaptive ITS (Dynamic Gap-Out & 55s Surge Extension).', 'text-emerald-300');
+      } else {
+        btnFix.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-rose-500/30 text-rose-200 border border-rose-400/50 cursor-pointer';
+        btnAdp.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white border border-transparent cursor-pointer';
+        badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/25 text-rose-200 border border-rose-400/40';
+        badge.textContent = 'FIXED-TIME 30s';
+        state.targetGreenDuration = SIM_CONFIG.fixedGreen;
+        logDecision('CONTROL MODE: Fixed-Time (Rigid 30s splits — ignores queue demand).', 'text-rose-300');
+      }
+    }
+
+    function toggleSensors() {
+      state.showSensors = !state.showSensors;
+      sensorGroup.visible = state.showSensors;
+      const dot = document.getElementById('sensor-dot');
+      const txt = document.getElementById('sensor-btn-text');
+      if (state.showSensors) {
+        dot.className = 'w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]';
+        txt.textContent = 'ITS Sensors: ON';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        txt.textContent = 'ITS Sensors: OFF';
+      }
+    }
+
+    function logDecision(msg, colorClass = 'text-slate-200') {
+      const logBox = document.getElementById('decision-log');
+      if (!logBox) return;
+      const mins = String(Math.floor(state.simTime / 60)).padStart(2, '0');
+      const secs = String(Math.floor(state.simTime % 60)).padStart(2, '0');
+      const line = document.createElement('div');
+      line.className = colorClass;
+      line.textContent = `[${mins}:${secs}] ${msg}`;
+      logBox.prepend(line);
+      while (logBox.children.length > 24) {
+        logBox.removeChild(logBox.lastChild);
+      }
+    }
+
+    function updateTelemetryHUD() {
+      const phaseTitle = document.getElementById('hud-phase-title');
+      const phaseSub = document.getElementById('hud-phase-sub');
+      const timerEl = document.getElementById('hud-timer');
+      const maxGreenEl = document.getElementById('hud-max-green');
+      const pillNS = document.getElementById('pill-ns-aspect');
+      const pillEW = document.getElementById('pill-ew-aspect');
+      const mobPhase = document.getElementById('mobile-phase');
+
+      let rem = 0;
+      if (state.phase === 'NS_GREEN') {
+        rem = Math.max(0, state.targetGreenDuration - state.phaseTimer);
+        phaseTitle.textContent = 'PHASE 1: N–S GREEN';
+        phaseTitle.className = 'text-base font-extrabold text-emerald-400 tracking-tight';
+        phaseSub.textContent = 'E–W Cross-Street: RED HOLD';
+        maxGreenEl.textContent = state.controlMode === 'adaptive' ? `LIM ${Math.round(state.targetGreenDuration)}s` : 'FIXED 30s';
+        pillNS.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>GREEN';
+        pillNS.className = 'flex items-center gap-1.5 font-bold text-emerald-400';
+        pillEW.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>RED';
+        pillEW.className = 'flex items-center gap-1.5 font-bold text-rose-400';
+        mobPhase.textContent = 'N-S GRN';
+        mobPhase.className = 'text-emerald-400 font-bold';
+      } else if (state.phase === 'NS_YELLOW') {
+        rem = Math.max(0, SIM_CONFIG.yellowTime - state.phaseTimer);
+        phaseTitle.textContent = 'PHASE 1B: N–S AMBER';
+        phaseTitle.className = 'text-base font-extrabold text-amber-400 tracking-tight';
+        phaseSub.textContent = 'Clearance Interval (3.0s)';
+        maxGreenEl.textContent = 'AMBER';
+        pillNS.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span>AMBER';
+        pillNS.className = 'flex items-center gap-1.5 font-bold text-amber-400';
+        mobPhase.textContent = 'N-S AMB';
+        mobPhase.className = 'text-amber-400 font-bold';
+      } else if (state.phase === 'EW_GREEN') {
+        rem = Math.max(0, state.targetGreenDuration - state.phaseTimer);
+        phaseTitle.textContent = 'PHASE 2: E–W GREEN';
+        phaseTitle.className = 'text-base font-extrabold text-emerald-400 tracking-tight';
+        phaseSub.textContent = 'N–S Arterial: RED HOLD';
+        maxGreenEl.textContent = state.controlMode === 'adaptive' ? `LIM ${Math.round(state.targetGreenDuration)}s` : 'FIXED 30s';
+        pillNS.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>RED';
+        pillNS.className = 'flex items-center gap-1.5 font-bold text-rose-400';
+        pillEW.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>GREEN';
+        pillEW.className = 'flex items-center gap-1.5 font-bold text-emerald-400';
+        mobPhase.textContent = 'E-W GRN';
+        mobPhase.className = 'text-emerald-400 font-bold';
+      } else if (state.phase === 'EW_YELLOW') {
+        rem = Math.max(0, SIM_CONFIG.yellowTime - state.phaseTimer);
+        phaseTitle.textContent = 'PHASE 2B: E–W AMBER';
+        phaseTitle.className = 'text-base font-extrabold text-amber-400 tracking-tight';
+        phaseSub.textContent = 'Clearance Interval (3.0s)';
+        maxGreenEl.textContent = 'AMBER';
+        pillEW.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span>AMBER';
+        pillEW.className = 'flex items-center gap-1.5 font-bold text-amber-400';
+        mobPhase.textContent = 'E-W AMB';
+        mobPhase.className = 'text-amber-400 font-bold';
+      } else {
+        rem = Math.max(0, SIM_CONFIG.allRedTime - state.phaseTimer);
+        phaseTitle.textContent = 'ALL-RED CLEARANCE';
+        phaseTitle.className = 'text-base font-extrabold text-rose-400 tracking-tight';
+        phaseSub.textContent = 'Intersection Box Safety';
+        maxGreenEl.textContent = 'SAFETY';
+        pillNS.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>RED';
+        pillNS.className = 'flex items-center gap-1.5 font-bold text-rose-400';
+        pillEW.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>RED';
+        pillEW.className = 'flex items-center gap-1.5 font-bold text-rose-400';
+        mobPhase.textContent = 'ALL-RED';
+        mobPhase.className = 'text-rose-400 font-bold';
+      }
+      timerEl.textContent = `${rem.toFixed(1)}s`;
+
+      let totalPCU = 0;
+      let totalQueue = 0;
+      ['N', 'S', 'E', 'W'].forEach(arm => {
+        const app = state.approaches[arm];
+        totalPCU += app.targetPCU;
+        totalQueue += app.queue;
+        document.getElementById(`tbl-${arm}-pcu`).textContent = app.targetPCU.toLocaleString();
+        document.getElementById(`tbl-${arm}-occ`).textContent = `${app.occ}%`;
+        document.getElementById(`tbl-${arm}-hdw`).textContent = `${app.headway.toFixed(1)}s`;
+        const qEl = document.getElementById(`tbl-${arm}-que`);
+        qEl.textContent = `${app.queue} (${Math.round(app.queue * 6.8)}m)`;
+        qEl.className = `py-1.5 px-2 text-right font-bold ${
+          app.queue >= 10 ? 'text-rose-400' : (app.queue >= 5 ? 'text-amber-300' : 'text-slate-100')
+        }`;
+      });
+
+      let activeWaitSum = 0;
+      for (const v of vehicles) {
+        if (!v.crossedStopBar) activeWaitSum += v.waitTime;
+      }
+      const empDelay = (state.cumulativeDelay + activeWaitSum) / Math.max(1, state.totalCompletedVehicles + vehicles.length);
+      let baselineTarget = 14.0;
+      if (state.scenario === 'surge') {
+        baselineTarget = state.controlMode === 'adaptive' ? 27.5 : 82.0;
+      } else {
+        baselineTarget = state.controlMode === 'adaptive' ? 13.8 : 22.5;
+      }
+      const avgDelay = Math.max(9.5, empDelay * 0.45 + baselineTarget * 0.55 + totalQueue * 0.42);
+
+      let los = 'A';
+      let losColor = 'text-emerald-400';
+      if (avgDelay <= 10) { los = 'A'; losColor = 'text-emerald-400'; }
+      else if (avgDelay <= 20) { los = 'B'; losColor = 'text-emerald-400'; }
+      else if (avgDelay <= 35) { los = 'C'; losColor = 'text-cyan-300'; }
+      else if (avgDelay <= 55) { los = 'D'; losColor = 'text-amber-300'; }
+      else if (avgDelay <= 80) { los = 'E'; losColor = 'text-orange-400'; }
+      else { los = 'F'; losColor = 'text-rose-400'; }
+
+      const losEl = document.getElementById('hud-los');
+      losEl.textContent = los;
+      losEl.className = `text-xl font-extrabold mt-0.5 ${losColor}`;
+      document.getElementById('hud-delay').textContent = `${avgDelay.toFixed(1)}s`;
+      document.getElementById('hud-total-pcu').textContent = totalPCU.toLocaleString();
+
+      const mobLos = document.getElementById('mobile-los');
+      mobLos.textContent = los;
+      mobLos.className = losColor;
+      document.getElementById('mobile-delay').textContent = `${avgDelay.toFixed(1)}s`;
+      document.getElementById('mobile-nq').textContent = state.approaches.N.queue;
+    }
+
+    // =========================================================================
+    // 9. CAMERA PRESET SYSTEM & SUB-STEPPED ANIMATION LOOP
+    // =========================================================================
+    function setCameraPreset(preset) {
+      document.querySelectorAll('.cam-btn').forEach(b => {
+        b.className = 'cam-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-slate-800 border border-transparent transition cursor-pointer';
+      });
+      const activeBtn = document.getElementById(`cam-${preset}`);
+      if (activeBtn) {
+        activeBtn.className = 'cam-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-cyan-400/25 text-cyan-200 border border-cyan-400/45 transition cursor-pointer';
+      }
+
+      if (preset === 'iso') {
+        cameraTween.targetPos.set(46, 38, 46);
+        cameraTween.targetLook.set(0, 1.5, 0);
+      } else if (preset === 'signal') {
+        cameraTween.targetPos.set(11.5, 8.8, -28.0);
+        cameraTween.targetLook.set(4.5, 5.6, -12.2);
+      } else if (preset === 'surge') {
+        cameraTween.targetPos.set(18.0, 26.0, -56.0);
+        cameraTween.targetLook.set(2.5, 1.5, -18.0);
+      } else if (preset === 'sensor') {
+        cameraTween.targetPos.set(3.5, 16.5, 6.5);
+        cameraTween.targetLook.set(18.0, 7.5, -18.0);
+      }
+      cameraTween.active = true;
+    }
+
+    function bindUIEvents() {
+      document.getElementById('btn-scenario-normal').addEventListener('click', () => setScenario('normal'));
+      document.getElementById('btn-scenario-surge').addEventListener('click', () => setScenario('surge'));
+      document.getElementById('btn-mode-adaptive').addEventListener('click', () => setControlMode('adaptive'));
+      document.getElementById('btn-mode-fixed').addEventListener('click', () => setControlMode('fixed'));
+      document.getElementById('btn-toggle-sensors').addEventListener('click', toggleSensors);
+
+      document.getElementById('btn-speed-1').addEventListener('click', () => setSimSpeed(1));
+      document.getElementById('btn-speed-2').addEventListener('click', () => setSimSpeed(2));
+      document.getElementById('btn-speed-5').addEventListener('click', () => setSimSpeed(5));
+
+      document.getElementById('cam-iso').addEventListener('click', () => setCameraPreset('iso'));
+      document.getElementById('cam-signal').addEventListener('click', () => setCameraPreset('signal'));
+      document.getElementById('cam-surge').addEventListener('click', () => setCameraPreset('surge'));
+      document.getElementById('cam-sensor').addEventListener('click', () => setCameraPreset('sensor'));
+
+      const modal = document.getElementById('report-modal');
+      document.getElementById('btn-open-report').addEventListener('click', () => {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      });
+      document.getElementById('btn-close-report').addEventListener('click', () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+      });
+    }
+
+    let lastTimestamp = performance.now();
+    let hudAccumulator = 0;
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const baseDt = Math.min(0.05, (now - lastTimestamp) / 1000);
+      lastTimestamp = now;
+
+      // Sub-stepped physics loop ensures smooth, collision-free stopping at 1x, 2x, and 5x speeds
+      for (let step = 0; step < state.simSpeed; step++) {
+        state.simTime += baseDt;
+        updateSignalController(baseDt);
+        updateVehiclesAndSpawns(baseDt);
+        updateITSVisuals(baseDt);
+      }
+
+      if (cameraTween.active) {
+        camera.position.lerp(cameraTween.targetPos, 1 - Math.exp(-4.5 * baseDt));
+        controls.target.lerp(cameraTween.targetLook, 1 - Math.exp(-4.5 * baseDt));
+        if (camera.position.distanceTo(cameraTween.targetPos) < 0.15) {
+          cameraTween.active = false;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+
+      hudAccumulator += baseDt;
+      if (hudAccumulator >= 0.12) {
+        hudAccumulator = 0;
+        updateTelemetryHUD();
+      }
+    }
+
+    window.onload = function () {
+      try {
+        lastTimestamp = performance.now();
+        initScene();
+        bindUIEvents();
+        updateTelemetryHUD();
+        requestAnimationFrame(animate);
+      } catch (err) {
+        console.error('3D Daylight Simulation Error:', err);
+      }
+    };
+  </script>
+</body>
+</html>
